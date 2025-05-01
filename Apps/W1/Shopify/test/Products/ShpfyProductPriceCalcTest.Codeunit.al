@@ -19,9 +19,6 @@ codeunit 139605 "Shpfy Product Price Calc. Test"
         InitializeTest: Codeunit "Shpfy Initialize Test";
         ProductInitTest: Codeunit "Shpfy Product Init Test";
         ProductPriceCalculation: Codeunit "Shpfy Product Price Calc.";
-#if not CLEAN22
-        ShpfyTemplates: Codeunit "Shpfy Templates";
-#endif
         InitUnitCost: Decimal;
         InitPrice: Decimal;
         InitDiscountPerc: Decimal;
@@ -34,15 +31,8 @@ codeunit 139605 "Shpfy Product Price Calc. Test"
         InitUnitCost := Any.DecimalInRange(10, 100, 1);
         InitPrice := Any.DecimalInRange(2 * InitUnitCost, 4 * InitUnitCost, 1);
         InitDiscountPerc := Any.DecimalInRange(5, 20, 1);
-#if not CLEAN22
-        if not ShpfyTemplates.NewTemplatesEnabled() then
-            Item := ProductInitTest.CreateItem(Shop."Item Template Code", InitUnitCost, InitPrice)
-        else
-            Item := ProductInitTest.CreateItem(Shop."Item Templ. Code", InitUnitCost, InitPrice);
-#else
         Item := ProductInitTest.CreateItem(Shop."Item Templ. Code", InitUnitCost, InitPrice);
-#endif
-#if not CLEAN21
+#if not CLEAN25
         ProductInitTest.CreateSalesPrice(Shop.Code, Item."No.", InitPrice);
         CustomerDiscountGroup := ProductInitTest.CreateSalesLineDiscount(Shop.Code, Item."No.", InitDiscountPerc);
 #else

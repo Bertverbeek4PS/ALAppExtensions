@@ -13,7 +13,9 @@ codeunit 31313 "Item Jnl.CheckLine Handler CZL"
     var
         UserSetupAdvManagementCZL: Codeunit "User Setup Adv. Management CZL";
     begin
-        if UserSetupAdvManagementCZL.IsCheckAllowed() and not CalledFromAdjustment then
+        if CalledFromAdjustment then
+            exit;
+        if UserSetupAdvManagementCZL.IsCheckAllowed() then
             UserSetupAdvManagementCZL.CheckItemJournalLine(ItemJnlLine);
     end;
 

@@ -40,14 +40,14 @@ codeunit 139822 "APIV2 - Employees E2E"
     procedure TestGetEmployee()
     var
         Employee: Record "Employee";
-        NoSeriesManagement: Codeunit "NoSeriesManagement";
+        NoSeries: Codeunit "No. Series";
         ResponseText: Text;
         TargetURL: Text;
     begin
         // [SCENARIO] User can get an Employee with a GET request to the service.
         Initialize();
 
-        NoSeriesManagement.GetNextNo(LibraryHumanResource.SetupEmployeeNumberSeries(), WorkDate(), true);
+        NoSeries.GetNextNo(LibraryHumanResource.SetupEmployeeNumberSeries());
 
         // [GIVEN] An Employee exists in the system.
         CreateEmployee(Employee);
@@ -57,7 +57,7 @@ codeunit 139822 "APIV2 - Employees E2E"
         LibraryGraphMgt.GetFromWebService(ResponseText, TargetURL);
 
         // [THEN] The response text contains the employee information.
-        VerifyEmployeeSimpleProperties(ResponseText, Employee);
+        VerifyEmployeeProperties(ResponseText, Employee);
     end;
 
     [Test]
@@ -80,11 +80,11 @@ codeunit 139822 "APIV2 - Employees E2E"
         LibraryGraphMgt.PostToWebService(TargetURL, EmployeeJSON, ResponseText);
 
         // [THEN] The response text contains the Employee information.
-        VerifyEmployeeSimpleProperties(ResponseText, TempEmployee);
+        VerifyEmployeeProperties(ResponseText, TempEmployee);
 
         // [THEN] The Employee has been created in the database.
         Employee.Get(TempEmployee."No.");
-        VerifyEmployeeSimpleProperties(ResponseText, Employee);
+        VerifyEmployeeProperties(ResponseText, Employee);
     end;
 
     [Test]
@@ -92,7 +92,7 @@ codeunit 139822 "APIV2 - Employees E2E"
     var
         Employee: Record "Employee";
         TempEmployee: Record "Employee" temporary;
-        NoSeriesManagement: Codeunit "NoSeriesManagement";
+        NoSeries: Codeunit "No. Series";
         RequestBody: Text;
         ResponseText: Text;
         TargetURL: Text;
@@ -100,12 +100,13 @@ codeunit 139822 "APIV2 - Employees E2E"
         // [SCENARIO] User can modify an Employee through a PATCH request.
         Initialize();
 
-        NoSeriesManagement.GetNextNo(LibraryHumanResource.SetupEmployeeNumberSeries(), WorkDate(), true);
+        NoSeries.GetNextNo(LibraryHumanResource.SetupEmployeeNumberSeries());
 
         // [GIVEN] An Employee exists.
         CreateEmployee(Employee);
+        Employee.Validate("Bank Account No.");
         TempEmployee.TransferFields(Employee);
-        TempEmployee."E-Mail" := LibraryUtility.GenerateGUID();
+        TempEmployee."E-Mail" := LibraryUtility.GenerateRandomEmail();
         RequestBody := GetEmployeeJSON(TempEmployee);
 
         // [WHEN] The user makes a patch request to the service.
@@ -113,11 +114,11 @@ codeunit 139822 "APIV2 - Employees E2E"
         LibraryGraphMgt.PatchToWebService(TargetURL, RequestBody, ResponseText);
 
         // [THEN] The response text contains the new values.
-        VerifyEmployeeSimpleProperties(ResponseText, TempEmployee);
+        VerifyEmployeeProperties(ResponseText, TempEmployee);
 
         // [THEN] The record in the database contains the new values.
         Employee.Get(Employee."No.");
-        VerifyEmployeeSimpleProperties(ResponseText, Employee);
+        VerifyEmployeeProperties(ResponseText, Employee);
     end;
 
     [Test]
@@ -149,17 +150,27 @@ codeunit 139822 "APIV2 - Employees E2E"
 
     local procedure CreateEmployee(var Employee: Record "Employee")
     begin
-        LibraryHumanResource.CreateEmployee(Employee);
+        LibraryHumanResource.CreateEmployeeWithBankAccount(Employee);
         Commit();
     end;
 
-    local procedure VerifyEmployeeSimpleProperties(EmployeeJSON: Text; Employee: Record "Employee")
+    local procedure VerifyEmployeeProperties(EmployeeJSON: Text; Employee: Record "Employee")
     begin
         Assert.AreNotEqual('', EmployeeJSON, EmptyJSONErr);
         LibraryGraphMgt.VerifyIDInJson(EmployeeJSON);
         VerifyPropertyInJSON(EmployeeJSON, 'number', Employee."No.");
         VerifyPropertyInJSON(EmployeeJSON, 'givenName', Employee."First Name");
         VerifyPropertyInJSON(EmployeeJSON, 'surname', Employee."Last Name");
+        VerifyPropertyInJSON(EmployeeJSON, 'jobTitle', Employee."Job Title");
+        VerifyPropertyInJSON(EmployeeJSON, 'addressLine1', Employee.Address);
+        VerifyPropertyInJSON(EmployeeJSON, 'city', Employee."City");
+        VerifyPropertyInJSON(EmployeeJSON, 'country', Employee."Country/Region Code");
+        VerifyPropertyInJSON(EmployeeJSON, 'postalCode', Employee."Post Code");
+        VerifyPropertyInJSON(EmployeeJSON, 'mobilePhone', Employee."Mobile Phone No.");
+        VerifyPropertyInJSON(EmployeeJSON, 'personalEmail', Employee."E-Mail");
+        VerifyPropertyInJSON(EmployeeJSON, 'bankBranchNumber', Employee."Bank Branch No.");
+        VerifyPropertyInJSON(EmployeeJSON, 'bankAccountNumber', Employee."Bank Account No.");
+        VerifyPropertyInJSON(EmployeeJSON, 'iban', Employee."IBAN");
     end;
 
     local procedure VerifyPropertyInJSON(JSON: Text; PropertyName: Text; ExpectedValue: Text)
@@ -172,14 +183,25 @@ codeunit 139822 "APIV2 - Employees E2E"
 
     local procedure GetEmployeeJSON(var Employee: Record "Employee") EmployeeJSON: Text
     var
-        NoSeriesManagement: Codeunit "NoSeriesManagement";
+        NoSeries: Codeunit "No. Series";
     begin
         if Employee."No." = '' then
-            Employee."No." := NoSeriesManagement.GetNextNo(LibraryHumanResource.SetupEmployeeNumberSeries(), WorkDate(), false);
+            Employee."No." := NoSeries.PeekNextNo(LibraryHumanResource.SetupEmployeeNumberSeries());
         if Employee."First Name" = '' then
             Employee."First Name" := Employee."No.";
         EmployeeJSON := LibraryGraphMgt.AddPropertytoJSON('', 'number', Employee."No.");
         EmployeeJSON := LibraryGraphMgt.AddPropertytoJSON(EmployeeJSON, 'givenName', Employee."First Name");
+        EmployeeJSON := LibraryGraphMgt.AddPropertytoJSON(EmployeeJSON, 'surname', Employee."Last Name");
+        EmployeeJSON := LibraryGraphMgt.AddPropertytoJSON(EmployeeJSON, 'jobTitle', Employee."Job Title");
+        EmployeeJSON := LibraryGraphMgt.AddPropertytoJSON(EmployeeJSON, 'addressLine1', Employee.Address);
+        EmployeeJSON := LibraryGraphMgt.AddPropertytoJSON(EmployeeJSON, 'city', Employee."City");
+        EmployeeJSON := LibraryGraphMgt.AddPropertytoJSON(EmployeeJSON, 'country', Employee."Country/Region Code");
+        EmployeeJSON := LibraryGraphMgt.AddPropertytoJSON(EmployeeJSON, 'postalCode', Employee."Post Code");
+        EmployeeJSON := LibraryGraphMgt.AddPropertytoJSON(EmployeeJSON, 'mobilePhone', Employee."Mobile Phone No.");
+        EmployeeJSON := LibraryGraphMgt.AddPropertytoJSON(EmployeeJSON, 'personalEmail', Employee."E-Mail");
+        EmployeeJSON := LibraryGraphMgt.AddPropertytoJSON(EmployeeJSON, 'bankBranchNumber', Employee."Bank Branch No.");
+        EmployeeJSON := LibraryGraphMgt.AddPropertytoJSON(EmployeeJSON, 'bankAccountNumber', Employee."Bank Account No.");
+        EmployeeJSON := LibraryGraphMgt.AddPropertytoJSON(EmployeeJSON, 'iban', Employee."IBAN");
     end;
 }
 

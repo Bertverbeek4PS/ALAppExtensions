@@ -8,9 +8,8 @@ namespace Microsoft.Integration.Shopify;
 /// </summary>
 enum 30122 "Shpfy Tracking Companies"
 {
-    Access = Internal;
     Caption = 'Shopify Tracking Companies';
-    Extensible = true;
+    Extensible = false;
 
     value(0; " ")
     {
@@ -204,5 +203,8 @@ enum 30122 "Shpfy Tracking Companies"
     {
         Caption = 'YunExpress';
     }
-
+    value(48; Other)
+    {
+        Caption = 'Other';
+    }
 }

@@ -182,25 +182,25 @@ report 31198 "Service Credit Memo CZL"
             column(PostingDate_ServiceCrMemoHeaderCaption; FieldCaption("Posting Date"))
             {
             }
-            column(PostingDate_ServiceCrMemoHeader; "Posting Date")
+            column(PostingDate_ServiceCrMemoHeader; Format("Posting Date"))
             {
             }
             column(VATDate_ServiceCrMemoHeaderCaption; FieldCaption("VAT Reporting Date"))
             {
             }
-            column(VATDate_ServiceCrMemoHeader; "VAT Reporting Date")
+            column(VATDate_ServiceCrMemoHeader; Format("VAT Reporting Date"))
             {
             }
             column(DueDate_ServiceCrMemoHeaderCaption; FieldCaption("Due Date"))
             {
             }
-            column(DueDate_ServiceCrMemoHeader; "Due Date")
+            column(DueDate_ServiceCrMemoHeader; Format("Due Date"))
             {
             }
             column(DocumentDate_ServiceCrMemoHeaderCaption; FieldCaption("Document Date"))
             {
             }
-            column(DocumentDate_ServiceCrMemoHeader; "Document Date")
+            column(DocumentDate_ServiceCrMemoHeader; Format("Document Date"))
             {
             }
             column(YourReference_ServiceCrMemoHeaderCaption; FieldCaption("Your Reference"))
@@ -470,7 +470,11 @@ report 31198 "Service Credit Memo CZL"
 
                 trigger OnPreDataItem()
                 begin
+#if not CLEAN27
                     NoOfLoops := Abs(NoOfCopies) + Customer."Invoice Copies" + 1;
+#else
+                    NoOfLoops := Abs(NoOfCopies) + 1;
+#endif
                     if NoOfLoops <= 0 then
                         NoOfLoops := 1;
 
@@ -518,12 +522,6 @@ report 31198 "Service Credit Memo CZL"
 
                 if "Currency Code" = '' then
                     "Currency Code" := "General Ledger Setup"."LCY Code";
-#if not CLEAN22
-#pragma warning disable AL0432
-                if not ReplaceVATDateMgtCZL.IsEnabled() then
-                    "VAT Reporting Date" := "VAT Date CZL";
-#pragma warning restore AL0432
-#endif
             end;
         }
     }
@@ -549,35 +547,15 @@ report 31198 "Service Credit Memo CZL"
         }
     }
     var
-        TempVATAmountLine: Record "VAT Amount Line" temporary;
         Customer: Record Customer;
-        PaymentTerms: Record "Payment Terms";
-        PaymentMethod: Record "Payment Method";
-        ReasonCode: Record "Reason Code";
         CurrencyExchangeRate: Record "Currency Exchange Rate";
         VATClause: Record "VAT Clause";
         LanguageMgt: Codeunit Language;
         FormatAddress: Codeunit "Format Address";
         FormatDocument: Codeunit "Format Document";
         FormatDocumentMgtCZL: Codeunit "Format Document Mgt. CZL";
-#if not CLEAN22
-#pragma warning disable AL0432
-        ReplaceVATDateMgtCZL: Codeunit "Replace VAT Date Mgt. CZL";
-#pragma warning restore AL0432
-#endif
-        ExchRateText: Text[50];
-        VATClauseText: Text;
-        CompanyAddr: array[8] of Text[100];
-        CustAddr: array[8] of Text[100];
-        ShipToAddr: array[8] of Text[100];
-        DocFooterText: Text[1000];
-        PaymentSymbol: array[2] of Text;
-        PaymentSymbolLabel: array[2] of Text;
-        CalculatedExchRate: Decimal;
-        NoOfCopies: Integer;
-        NoOfLoops: Integer;
+        ServiceFormatAddress: Codeunit "Service Format Address";
         ExchRateLbl: Label 'Exchange Rate %1 %2 / %3 %4', Comment = '%1 = Calculated Exchange Rate, %2 = LCY Code, %3 = Exchange Rate, %4 = Currency Code';
-        DocumentLbl: Text;
         CorrectiveTaxDocumentLbl: Label 'Service - Corrective Tax Document';
         InternalCorrectionLbl: Label 'Service - Internal Correction';
         InsolvencyTaxDocumentLbl: Label 'Service - Insolvency Tax Document';
@@ -601,6 +579,24 @@ report 31198 "Service Credit Memo CZL"
         TotalLbl: Label 'total';
         VATLbl: Label 'VAT';
 
+    protected var
+        PaymentTerms: Record "Payment Terms";
+        PaymentMethod: Record "Payment Method";
+        ReasonCode: Record "Reason Code";
+        TempVATAmountLine: Record "VAT Amount Line" temporary;
+        CompanyAddr: array[8] of Text[100];
+        CustAddr: array[8] of Text[100];
+        ShipToAddr: array[8] of Text[100];
+        PaymentSymbol: array[2] of Text;
+        PaymentSymbolLabel: array[2] of Text;
+        ExchRateText: Text[50];
+        DocFooterText: Text[1000];
+        DocumentLbl: Text;
+        VATClauseText: Text;
+        CalculatedExchRate: Decimal;
+        NoOfCopies: Integer;
+        NoOfLoops: Integer;
+
     local procedure FormatDocumentFields(ServiceCrMemoHeader: Record "Service Cr.Memo Header")
     begin
         FormatDocument.SetPaymentTerms(PaymentTerms, ServiceCrMemoHeader."Payment Terms Code", ServiceCrMemoHeader."Language Code");
@@ -619,8 +615,8 @@ report 31198 "Service Credit Memo CZL"
 
     local procedure FormatAddressFields(ServiceCrMemoHeader: Record "Service Cr.Memo Header")
     begin
-        FormatAddress.ServiceCrMemoBillTo(CustAddr, ServiceCrMemoHeader);
-        FormatAddress.ServiceCrMemoShipTo(ShipToAddr, CustAddr, ServiceCrMemoHeader);
+        ServiceFormatAddress.ServiceCrMemoBillTo(CustAddr, ServiceCrMemoHeader);
+        ServiceFormatAddress.ServiceCrMemoShipTo(ShipToAddr, CustAddr, ServiceCrMemoHeader);
     end;
 
     local procedure IsReportInPreviewMode(): Boolean

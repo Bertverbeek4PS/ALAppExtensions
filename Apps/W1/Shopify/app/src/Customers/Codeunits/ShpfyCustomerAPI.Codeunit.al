@@ -15,6 +15,7 @@ codeunit 30114 "Shpfy Customer API"
         CommunicationMgt: Codeunit "Shpfy Communication Mgt.";
         JsonHelper: Codeunit "Shpfy Json Helper";
         CustomerEvents: Codeunit "Shpfy Customer Events";
+        MetafieldAPI: Codeunit "Shpfy Metafield API";
 
     /// <summary> 
     /// Add Field To Graph Query.
@@ -35,7 +36,7 @@ codeunit 30114 "Shpfy Customer API"
             GraphQuery.Append(': \"')
         else
             GraphQuery.Append(': ');
-        GraphQuery.Append(CommunicationMgt.EscapeGrapQLData(Format(ValueAsVariant)));
+        GraphQuery.Append(CommunicationMgt.EscapeGraphQLData(Format(ValueAsVariant)));
         if ValueAsString then
             GraphQuery.Append('\", ')
         else
@@ -231,6 +232,7 @@ codeunit 30114 "Shpfy Customer API"
         Clear(Shop);
         Shop.Get(Code);
         CommunicationMgt.SetShop(Shop);
+        MetafieldAPI.SetShop(Shop);
     end;
 
     /// <summary> 
@@ -264,8 +266,11 @@ codeunit 30114 "Shpfy Customer API"
                 if JItem.IsObject then begin
                     if ShopifyCustomer.Id <> CommunicationMgt.GetIdOfGId(JsonHelper.GetValueAsText(JItem, 'id')) then
                         Error(UpdateCustIdErr);
-                    ShopifyCustomer."Accepts Marketing" := JsonHelper.GetValueAsBoolean(JItem, 'acceptsMarketing');
-                    ShopifyCustomer."Accepts Marketing Update At" := JsonHelper.GetValueAsDateTime(JItem, 'acceptsMArketingUpdatedAt');
+                    if JsonHelper.GetValueAsText(JItem, 'emailMarketingConsent.marketingState') = 'SUBSCRIBED' then
+                        ShopifyCustomer."Accepts Marketing" := true
+                    else
+                        ShopifyCustomer."Accepts Marketing" := false;
+                    ShopifyCustomer."Accepts Marketing Update At" := JsonHelper.GetValueAsDateTime(JItem, 'emailMarketingConsent.consentUpdatedAt');
                     ShopifyCustomer."Tax Exempt" := JsonHelper.GetValueAsBoolean(JItem, 'taxExempt');
                     ShopifyCustomer."Updated At" := JsonHelper.GetValueAsDateTime(JItem, 'updatedAt');
                     ShopifyCustomer."Verified Email" := JsonHelper.GetValueAsBoolean(JItem, 'verifiedEmail');
@@ -310,7 +315,7 @@ codeunit 30114 "Shpfy Customer API"
         if ShopifyCustomer."Phone No." <> xShopifyCustomer."Phone No." then
             HasChange := AddFieldToGraphQuery(GraphQuery, 'phone', ShopifyCustomer."Phone No.");
         if ShopifyCustomer.GetNote() <> xShopifyCustomer.GetNote() then
-            HasChange := AddFieldToGraphQuery(GraphQuery, 'note', CommunicationMgt.EscapeGrapQLData(ShopifyCustomer.GetNote()));
+            HasChange := AddFieldToGraphQuery(GraphQuery, 'note', CommunicationMgt.EscapeGraphQLData(ShopifyCustomer.GetNote()));
 
         GraphQuery.Append('addresses: {');
 
@@ -322,13 +327,13 @@ codeunit 30114 "Shpfy Customer API"
         if ShopifyCustomerAddress."Last Name" <> xShopifyCustomer."Last Name" then
             HasChange := AddFieldToGraphQuery(GraphQuery, 'lastName', ShopifyCustomerAddress."Last Name");
         if ShopifyCustomerAddress."Address 1" <> '' then
-            HasChange := AddFieldToGraphQuery(GraphQuery, 'address1', CommunicationMgt.EscapeGrapQLData(ShopifyCustomerAddress."Address 1"));
+            HasChange := AddFieldToGraphQuery(GraphQuery, 'address1', CommunicationMgt.EscapeGraphQLData(ShopifyCustomerAddress."Address 1"));
         if ShopifyCustomerAddress."Address 2" <> '' then
-            HasChange := AddFieldToGraphQuery(GraphQuery, 'address2', CommunicationMgt.EscapeGrapQLData(ShopifyCustomerAddress."Address 2"));
+            HasChange := AddFieldToGraphQuery(GraphQuery, 'address2', CommunicationMgt.EscapeGraphQLData(ShopifyCustomerAddress."Address 2"));
         if ShopifyCustomerAddress.Zip <> '' then
             HasChange := AddFieldToGraphQuery(GraphQuery, 'zip', ShopifyCustomerAddress.Zip);
         if ShopifyCustomerAddress.City <> '' then
-            HasChange := AddFieldToGraphQuery(GraphQuery, 'city', CommunicationMgt.EscapeGrapQLData(ShopifyCustomerAddress.City));
+            HasChange := AddFieldToGraphQuery(GraphQuery, 'city', CommunicationMgt.EscapeGraphQLData(ShopifyCustomerAddress.City));
         if ShopifyCustomerAddress."Province Code" <> '' then
             HasChange := AddFieldToGraphQuery(GraphQuery, 'provinceCode', ShopifyCustomerAddress."Province Code");
         if ShopifyCustomerAddress."Country/Region Code" <> '' then
@@ -339,7 +344,7 @@ codeunit 30114 "Shpfy Customer API"
 
         if HasChange then begin
             GraphQuery.Remove(GraphQuery.Length - 1, 2);
-            GraphQuery.Append('}}) {customer {id, acceptsMarketing, acceptsMarketingUpdatedAt, tags, updatedAt, verifiedEmail, defaultAddress {id, province, country}}, userErrors {field, message}}}"}');
+            GraphQuery.Append('}}) {customer {id, tags, updatedAt, verifiedEmail, emailMarketingConsent {consentUpdatedAt marketingState}, defaultAddress {id, province, country}}, userErrors {field, message}}}"}');
             exit(GraphQuery.ToText());
         end;
     end;
@@ -359,6 +364,7 @@ codeunit 30114 "Shpfy Customer API"
         JTags: JsonArray;
         JAddress: JsonObject;
         JItem: JsonToken;
+        JMetafields: JsonArray;
         Ids: List of [BigInteger];
         OutStream: OutStream;
         StateString: Text;
@@ -380,8 +386,11 @@ codeunit 30114 "Shpfy Customer API"
         PhoneNo := JsonHelper.GetValueAsText(JCustomer, 'phone');
         PhoneNo := DelChr(PhoneNo, '=', DelChr(PhoneNo, '=', '1234567890/+ .()'));
         ShopifyCustomer."Phone No." := CopyStr(PhoneNo, 1, MaxStrLen(ShopifyCustomer."Phone No."));
-        ShopifyCustomer."Accepts Marketing" := JsonHelper.GetValueAsBoolean(JCustomer, 'acceptsMarketing');
-        ShopifyCustomer."Accepts Marketing Update At" := JsonHelper.GetValueAsDateTime(JCustomer, 'acceptsMarketingUpdateAt');
+        if JsonHelper.GetValueAsText(JCustomer, 'emailMarketingConsent.marketingState') = 'SUBSCRIBED' then
+            ShopifyCustomer."Accepts Marketing" := true
+        else
+            ShopifyCustomer."Accepts Marketing" := false;
+        ShopifyCustomer."Accepts Marketing Update At" := JsonHelper.GetValueAsDateTime(JCustomer, 'emailMarketingConsent.consentUpdatedAt');
         ShopifyCustomer."Tax Exempt" := JsonHelper.GetValueAsBoolean(JCustomer, 'taxExempt');
         ShopifyCustomer."Verified Email" := JsonHelper.GetValueAsBoolean(JCustomer, 'verifiedEmail');
         StateString := JsonHelper.GetValueAsText(JCustomer, 'state').ToLower();
@@ -456,6 +465,9 @@ codeunit 30114 "Shpfy Customer API"
                     CustomerAddress.Modify(false);
                 end;
             end;
+
+            if JsonHelper.GetJsonArray(JCustomer, JMetafields, 'metafields.edges') then
+                MetafieldAPI.UpdateMetafieldsFromShopify(JMetafields, Database::"Shpfy Customer", ShopifyCustomer.Id);
         end;
     end;
 

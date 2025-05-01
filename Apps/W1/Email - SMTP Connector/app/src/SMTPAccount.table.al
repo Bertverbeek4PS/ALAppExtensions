@@ -31,14 +31,16 @@ table 4511 "SMTP Account"
         field(3; "Server"; Text[250])
         {
             DataClassification = CustomerContent;
-        }
+            Caption = 'Server Address';
+            ToolTip = 'Specifies the address of the SMTP server. For example, smtp.office365.com.';
 
-        field(4; Authentication; Enum "SMTP Authentication")
-        {
-            DataClassification = CustomerContent;
-            ObsoleteReason = 'Replaced by "Authentication Types" as the enum is moving to SMTP API app.';
-            ObsoleteState = Removed;
-            ObsoleteTag = '23.0';
+            trigger OnValidate()
+            begin
+                if Server.StartsWith('http://') then
+                    Server := CopyStr(Server.Replace('http://', ''), 1, MaxStrLen(Server));
+                if Server.StartsWith('https://') then
+                    Server := CopyStr(Server.Replace('https://', ''), 1, MaxStrLen(Server));
+            end;
         }
 
         field(5; "User Name"; Text[250])
@@ -102,14 +104,6 @@ table 4511 "SMTP Account"
         {
             DataClassification = CustomerContent;
         }
-
-        field(12; "Created By"; Text[50])
-        {
-            DataClassification = EndUserIdentifiableInformation;
-            ObsoleteReason = 'Unused, can be replaced by SystemCreatedBy and correlate with the User table''s  User Security Id.';
-            ObsoleteState = Removed;
-            ObsoleteTag = '20.0';
-        }
         field(13; "Authentication Type"; Enum "SMTP Authentication Types")
         {
             DataClassification = CustomerContent;
@@ -135,7 +129,7 @@ table 4511 "SMTP Account"
     end;
 
     [NonDebuggable]
-    procedure SetPassword(Password: Text)
+    procedure SetPassword(Password: SecretText)
     begin
         if IsNullGuid(Rec."Password Key") then
             Rec."Password Key" := CreateGuid();
@@ -145,7 +139,7 @@ table 4511 "SMTP Account"
     end;
 
     [NonDebuggable]
-    procedure GetPassword(PasswordKey: Guid) Password: Text
+    procedure GetPassword(PasswordKey: Guid) Password: SecretText
     begin
         if not IsolatedStorage.Get(Format(PasswordKey), DataScope::Company, Password) then
             Error(UnableToGetPasswordMsg);

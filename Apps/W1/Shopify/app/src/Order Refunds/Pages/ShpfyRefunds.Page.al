@@ -93,13 +93,15 @@ page 30147 "Shpfy Refunds"
                 Caption = 'Create Credit Memo';
                 Image = CreateCreditMemo;
                 ToolTip = 'Create a credit memo for this refund.';
-                Enabled = CanCreateDocument;
+                Enabled = CanCreateDocument and not MultipleSelected;
 
                 trigger OnAction()
                 var
+                    RefundsAPI: Codeunit "Shpfy Refunds API";
                     IReturnRefundProcess: Interface "Shpfy IReturnRefund Process";
                     ErrorInfo: ErrorInfo;
                 begin
+                    RefundsAPI.VerifyRefundCanCreateCreditMemo(Rec."Refund Id");
                     IReturnRefundProcess := "Shpfy ReturnRefund ProcessType"::"Auto Create Credit Memo";
                     if IReturnRefundProcess.CanCreateSalesDocumentFor("Shpfy Source Document Type"::Refund, Rec."Refund Id", ErrorInfo) then
                         IReturnRefundProcess.CreateSalesDocument("Shpfy Source Document Type"::Refund, Rec."Refund Id")
@@ -115,9 +117,14 @@ page 30147 "Shpfy Refunds"
     }
     var
         CanCreateDocument: Boolean;
+        MultipleSelected: Boolean;
 
     trigger OnAfterGetCurrRecord()
+    var
+        RefundHeader: Record "Shpfy Refund Header";
     begin
         CanCreateDocument := Rec.CheckCanCreateDocument();
+        CurrPage.SetSelectionFilter(RefundHeader);
+        MultipleSelected := RefundHeader.Count > 1;
     end;
 }

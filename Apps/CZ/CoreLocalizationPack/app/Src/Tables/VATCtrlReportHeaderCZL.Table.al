@@ -1,4 +1,4 @@
-﻿// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License. See License.txt in the project root for license information.
 // ------------------------------------------------------------------------------------------------
@@ -24,9 +24,11 @@ table 31106 "VAT Ctrl. Report Header CZL"
             DataClassification = CustomerContent;
 
             trigger OnValidate()
+            var
+                NoSeries: Codeunit "No. Series";
             begin
                 if "No." <> xRec."No." then begin
-                    NoSeriesManagement.TestManual(GetNoSeriesCode());
+                    NoSeries.TestManual(GetNoSeriesCode());
                     "No. Series" := '';
                 end;
             end;
@@ -198,9 +200,22 @@ table 31106 "VAT Ctrl. Report Header CZL"
     end;
 
     trigger OnInsert()
+    var
+        VATCtrlReportHeader: Record "VAT Ctrl. Report Header CZL";
+        NoSeries: Codeunit "No. Series";
+        NoSeriesCode: Code[20];
     begin
-        if "No." = '' then
-            NoSeriesManagement.InitSeries(GetNoSeriesCode(), xRec."No. Series", WorkDate(), "No.", "No. Series");
+        if "No." = '' then begin
+            NoSeriesCode := GetNoSeriesCode();
+                "No. Series" := NoSeriesCode;
+                if NoSeries.AreRelated("No. Series", xRec."No. Series") then
+                    "No. Series" := xRec."No. Series";
+                "No." := NoSeries.GetNextNo("No. Series");
+                VATCtrlReportHeader.ReadIsolation(ReadIsolation::ReadUncommitted);
+                VATCtrlReportHeader.SetLoadFields("No.");
+                while VATCtrlReportHeader.Get("No.") do
+                    "No." := NoSeries.GetNextNo("No. Series");
+        end;
         InitRecord();
     end;
 
@@ -211,7 +226,6 @@ table 31106 "VAT Ctrl. Report Header CZL"
 
     var
         VATCtrlReportLineCZL: Record "VAT Ctrl. Report Line CZL";
-        NoSeriesManagement: Codeunit NoSeriesManagement;
         VATCtrlReportMgtCZL: Codeunit "VAT Ctrl. Report Mgt. CZL";
         VATCtrlRepExpRunnerCZL: Codeunit "VAT Ctrl. Rep. Exp. Runner CZL";
         RecordRenameErr: Label 'You cannot rename a %1.', Comment = '%1 = Header No.';
@@ -225,9 +239,11 @@ table 31106 "VAT Ctrl. Report Header CZL"
     end;
 
     procedure AssistEdit(OldVATCtrlReportHeaderCZL: Record "VAT Ctrl. Report Header CZL"): Boolean
+    var
+        NoSeries: Codeunit "No. Series";
     begin
-        if NoSeriesManagement.SelectSeries(GetNoSeriesCode(), OldVATCtrlReportHeaderCZL."No. Series", "No. Series") then begin
-            NoSeriesManagement.SetSeries("No.");
+        if NoSeries.LookupRelatedNoSeries(GetNoSeriesCode(), OldVATCtrlReportHeaderCZL."No. Series", "No. Series") then begin
+            "No." := NoSeries.GetNextNo("No. Series");
             exit(true);
         end;
     end;

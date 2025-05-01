@@ -1,4 +1,4 @@
-﻿// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License. See License.txt in the project root for license information.
 // ------------------------------------------------------------------------------------------------
@@ -19,10 +19,12 @@ table 10018 "IRS 1096 Form Header"
             Caption = 'No.';
 
             trigger OnValidate()
+            var
+                NoSeries: Codeunit "No. Series";
             begin
                 if "No." <> xRec."No." then begin
                     PurchPayablesSetup.GetRecordOnce();
-                    NoSeriesMgt.TestManual(PurchPayablesSetup."IRS 1096 Form No. Series");
+                    NoSeries.TestManual(PurchPayablesSetup."IRS 1096 Form No. Series");
                     "No. Series" := '';
                 end;
             end;
@@ -120,10 +122,10 @@ table 10018 "IRS 1096 Form Header"
 
     var
         PurchPayablesSetup: Record "Purchases & Payables Setup";
-        NoSeriesMgt: Codeunit NoSeriesManagement;
 
     trigger OnInsert()
     var
+        NoSeries: Codeunit "No. Series";
         IsHandled: Boolean;
     begin
         IsHandled := false;
@@ -133,7 +135,10 @@ table 10018 "IRS 1096 Form Header"
 
         if "No." = '' then begin
             GetPurchSetupWithIRS1096NoSeries();
-            NoSeriesMgt.InitSeries(PurchPayablesSetup."IRS 1096 Form No. Series", xRec."No. Series", 0D, "No.", "No. Series");
+                "No. Series" := PurchPayablesSetup."IRS 1096 Form No. Series";
+                if NoSeries.AreRelated("No. Series", xRec."No. Series") then
+                    "No. Series" := xRec."No. Series";
+                "No." := NoSeries.GetNextNo("No. Series");
         end;
     end;
 
@@ -155,6 +160,7 @@ table 10018 "IRS 1096 Form Header"
     procedure AssistEdit(xIRS1096FormHeader: Record "IRS 1096 Form Header") Result: Boolean
     var
         IRS1096FormHeader: Record "IRS 1096 Form Header";
+        NoSeries: Codeunit "No. Series";
         IsHandled: Boolean;
     begin
         IsHandled := false;
@@ -164,8 +170,8 @@ table 10018 "IRS 1096 Form Header"
 
         IRS1096FormHeader := Rec;
         GetPurchSetupWithIRS1096NoSeries();
-        if NoSeriesMgt.SelectSeries(PurchPayablesSetup."IRS 1096 Form No. Series", xIRS1096FormHeader."No. Series", IRS1096FormHeader."No. Series") then begin
-            NoSeriesMgt.SetSeries(IRS1096FormHeader."No.");
+        if NoSeries.LookupRelatedNoSeries(PurchPayablesSetup."IRS 1096 Form No. Series", xIRS1096FormHeader."No. Series", IRS1096FormHeader."No. Series") then begin
+            IRS1096FormHeader."No." := NoSeries.GetNextNo(IRS1096FormHeader."No. Series");
             Rec := IRS1096FormHeader;
             exit(true);
         end;

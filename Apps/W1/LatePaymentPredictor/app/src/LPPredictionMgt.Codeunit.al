@@ -59,7 +59,7 @@ codeunit 1950 "LP Prediction Mgt."
         MLPredictionManagement: Codeunit "ML Prediction Management";
         LPFeatureTableHelper: Codeunit "LP Feature Table Helper";
         ApiUri: Text[250];
-        ApiKey: Text[200];
+        ApiKey: SecretText;
     begin
         LPMachineLearningSetup.GetSingleInstance();
         LPMachineLearningSetup.CheckModelQuality();
@@ -90,7 +90,7 @@ codeunit 1950 "LP Prediction Mgt."
         MLPredictionManagement: Codeunit "ML Prediction Management";
         LPFeatureTableHelper: Codeunit "LP Feature Table Helper";
         ApiUri: Text[250];
-        ApiKey: Text[200];
+        ApiKey: SecretText;
     begin
         LPMachineLearningSetup.GetSingleInstance();
         LPMachineLearningSetup.CheckModelQuality();
@@ -115,13 +115,13 @@ codeunit 1950 "LP Prediction Mgt."
     begin
     end;
 
-    procedure GetAzureMLCredentials(LPMachineLearningSetup: Record "LP Machine Learning Setup"; var ApiUri: Text[250]; var ApiKey: Text[200]): Boolean
+    procedure GetAzureMLCredentials(LPMachineLearningSetup: Record "LP Machine Learning Setup"; var ApiUri: Text[250]; var ApiKey: SecretText): Boolean
     begin
         if not LPMachineLearningSetup."Use My Model Credentials" then
             exit(false);
 
         ApiUri := LPMachineLearningSetup.GetApiUri();
-        ApiKey := LPMachineLearningSetup.GetApiKey();
+        ApiKey := LPMachineLearningSetup.GetApiKeyAsSecret();
         exit(true);
     end;
 

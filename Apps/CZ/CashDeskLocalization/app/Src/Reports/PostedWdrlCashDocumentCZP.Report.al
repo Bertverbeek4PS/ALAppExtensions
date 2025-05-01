@@ -97,9 +97,8 @@ report 11737 "Posted Wdrl. Cash Document CZP"
             column(CurrencyCode_PostedCashDocumentHeader; "Currency Code")
             {
             }
-            column(PostingDate_PostedCashDocumentHeader; "Posting Date")
+            column(PostingDate_PostedCashDocumentHeader; Format("Posting Date"))
             {
-                IncludeCaption = true;
             }
             column(PaymentPurpose_PostedCashDocumentHeader; "Payment Purpose")
             {
@@ -164,6 +163,9 @@ report 11737 "Posted Wdrl. Cash Document CZP"
                     column(VATBaseAmount_PostedCashDocumentLine; "VAT Base Amount")
                     {
                         IncludeCaption = true;
+                    }
+                    column(AccountType_PostedCashDocumentLine; Format("Account Type", 0, 2))
+                    {
                     }
 
                     trigger OnPreDataItem()
@@ -401,16 +403,19 @@ report 11737 "Posted Wdrl. Cash Document CZP"
         PKPLbl = 'PKP:';
         IssueDatetimeLbl = 'Issue Datetime:';
         CopyLbl = 'Copy';
+        PostingDateLbl = 'Posting Date';
     }
 
     var
-        TempVATAmountLine: Record "VAT Amount Line" temporary;
         CurrencyExchangeRate: Record "Currency Exchange Rate";
         FormatAddress: Codeunit "Format Address";
-        ExchRateText: Text[50];
-        CompanyAddr: array[8] of Text[100];
-        CalculatedExchRate: Decimal;
         ExchangeRateTxt: Label 'Exchange Rate %1 %2 / %3 %4', Comment = '%1 = Calculated Exchange Rate Amount; %2 = LCY Code; %3 = Exchange Rate Amount; %4 = Currency Code';
+
+    protected var
+        TempVATAmountLine: Record "VAT Amount Line" temporary;
+        CompanyAddr: array[8] of Text[100];
+        ExchRateText: Text[50];
+        CalculatedExchRate: Decimal;
         NoOfCopies: Integer;
         NoOfLoops: Integer;
         PrintAccountingSheet: Boolean;

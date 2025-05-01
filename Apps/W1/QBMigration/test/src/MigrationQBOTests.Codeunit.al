@@ -194,8 +194,8 @@ codeunit 139530 "MigrationQBO Tests"
         Assert.AreEqual(false, AccountMigrator.PreDataIsValid(), 'Should have errored on empty AcctNum.');
     end;
 
+    [HandlerFunctions('ConfirmHandler')]
     [Test]
-    [HandlerFunctions('ConfirmHandlerNo')]
     procedure TestQBOCustomerImport()
     var
         Customer: Record "Customer";
@@ -626,6 +626,8 @@ codeunit 139530 "MigrationQBO Tests"
 
     [Normal]
     local procedure Initialize()
+    var
+        DummyAccessToken: Text;
     begin
         if not BindSubscription(MigrationQBOMigrationTests) then
             exit;
@@ -636,7 +638,8 @@ codeunit 139530 "MigrationQBO Tests"
         MigrationQBVendor.DeleteAll();
 
         MigrationQBConfig.DeleteAll();
-        MigrationQBConfig.InitializeOnlineConfig('accesstokey', 'realmid');
+        DummyAccessToken := 'accesstokey';
+        MigrationQBConfig.InitializeOnlineConfig(DummyAccessToken, 'realmid');
         SetPostingAccounts();
 
         if UnbindSubscription(MigrationQBOMigrationTests) then
@@ -795,7 +798,7 @@ codeunit 139530 "MigrationQBO Tests"
 
     [ConfirmHandler]
     [Scope('OnPrem')]
-    procedure ConfirmHandlerNo(Question: Text[1024]; var Reply: Boolean)
+    procedure ConfirmHandler(Question: Text[1024]; var Reply: Boolean)
     begin
         Reply := false;
     end;

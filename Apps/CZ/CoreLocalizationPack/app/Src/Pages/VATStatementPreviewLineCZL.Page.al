@@ -1,13 +1,10 @@
-﻿// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License. See License.txt in the project root for license information.
 // ------------------------------------------------------------------------------------------------
 namespace Microsoft.Finance.VAT.Reporting;
 
 using Microsoft.Finance.Currency;
-#if not CLEAN24
-using Microsoft.Finance.EU3PartyTrade;
-#endif
 using Microsoft.Finance.GeneralLedger.Ledger;
 using Microsoft.Finance.GeneralLedger.Setup;
 using Microsoft.Finance.VAT.Calculation;
@@ -82,27 +79,11 @@ page 31136 "VAT Statement Preview Line CZL"
                     ToolTip = 'Specifies the code for the Gen. Prod. Posting Group that applies to the entry.';
                     Visible = false;
                 }
-#if not CLEAN24
-                field("EU-3 Party Trade CZL"; Rec."EU-3 Party Trade CZL")
-                {
-                    ApplicationArea = VAT;
-                    Caption = 'EU 3-Party Trade (Obsolete)';
-                    ToolTip = 'Specifies whether the document is part of a three-party trade.';
-                    Visible = false;
-                    Enabled = not EU3PartyTradeFeatureEnabled;
-                    ObsoleteState = Pending;
-                    ObsoleteTag = '24.0';
-                    ObsoleteReason = 'Replaced by "EU 3 Party Trade" field in "EU 3-Party Trade Purchase" app.';
-                }
-#endif
                 field("EU 3 Party Trade"; Rec."EU 3 Party Trade")
                 {
                     ApplicationArea = VAT;
                     ToolTip = 'Specifies whether or not totals for transactions involving EU 3-party trades are displayed in the VAT Statement.';
                     Visible = false;
-#if not CLEAN23
-                    Enabled = EU3PartyTradeFeatureEnabled;
-#endif
                 }
                 field("EU 3-Party Intermed. Role CZL"; Rec."EU 3-Party Intermed. Role CZL")
                 {
@@ -145,13 +126,6 @@ page 31136 "VAT Statement Preview Line CZL"
                                         GLEntry.SetRange("VAT Bus. Posting Group", Rec."VAT Bus. Posting Group");
                                     if Rec."VAT Prod. Posting Group" <> '' then
                                         GLEntry.SetRange("VAT Prod. Posting Group", Rec."VAT Prod. Posting Group");
-#if not CLEAN22
-#pragma warning disable AL0432
-                                    if not GLEntry.IsReplaceVATDateEnabled() then
-                                        Rec.CopyFilter("Date Filter", GLEntry."VAT Date CZL")
-                                    else
-#pragma warning restore AL0432
-#endif
                                     Rec.CopyFilter("Date Filter", GLEntry."VAT Reporting Date");
 
                                     Page.Run(Page::"General Ledger Entries", GLEntry);
@@ -193,9 +167,6 @@ page 31136 "VAT Statement Preview Line CZL"
             GeneralLedgerSetup.Init();
         Clear(Currency);
         Currency.InitRoundingPrecision();
-#if not CLEAN24
-        EU3PartyTradeFeatureEnabled := EU3PartyTradeFeatMgt.IsEnabled();
-#endif
     end;
 
     trigger OnAfterGetRecord()
@@ -212,17 +183,9 @@ page 31136 "VAT Statement Preview Line CZL"
         Currency: Record Currency;
         GLEntry: Record "G/L Entry";
         VATEntry: Record "VAT Entry";
-        VATStatementCZL: Report "VAT Statement CZL";
-#if not CLEAN24
-#pragma warning disable AL0432
-        EU3PartyTradeFeatMgt: Codeunit "EU3 Party Trade Feat Mgt. CZL";
-#pragma warning restore AL0432
-#endif
+        VATStatement: Report "VAT Statement";
         VATReportingDateMgt: Codeunit "VAT Reporting Date Mgt";
         UseAmtsInAddCurr: Boolean;
-#if not CLEAN24
-        EU3PartyTradeFeatureEnabled: Boolean;
-#endif
         ColumnValue: Decimal;
         VATStatementReportPeriodSelection: Enum "VAT Statement Report Period Selection";
         VATStatementReportSelection: Enum "VAT Statement Report Selection";
@@ -240,7 +203,7 @@ page 31136 "VAT Statement Preview Line CZL"
 
         if VATStatementLine.Type = VATStatementLine.Type::"VAT Entry Totaling" then
             VATStatementLine.TestField("Amount Type");
-        VATStatementCZL.CalcLineTotal(VATStatementLine, ColumnValue, Level);
+        VATStatement.CalcLineTotal(VATStatementLine, ColumnValue, Level);
         case VATStatementLine."Show CZL" of
             VATStatementLine."Show CZL"::"Zero If Negative":
                 if ColumnValue < 0 then
@@ -259,7 +222,7 @@ page 31136 "VAT Statement Preview Line CZL"
         VATStatementReportSelection := NewSelection;
         VATStatementReportPeriodSelection := NewPeriodSelection;
         UseAmtsInAddCurr := NewUseAmtsInAddCurr;
-        VATStatementCZL.InitializeRequest(VATStatementName, Rec, VATStatementReportSelection, VATStatementReportPeriodSelection, false, UseAmtsInAddCurr, SettlementNoFilter2);
+        VATStatement.InitializeRequestCZL(VATStatementName, Rec, VATStatementReportSelection, VATStatementReportPeriodSelection, false, UseAmtsInAddCurr, SettlementNoFilter2, 0);
         SettlementNoFilter := SettlementNoFilter2;
         OnUpdateFormOnBeforePageUpdate(VATStatementName, Rec, VATStatementReportSelection, VATStatementReportPeriodSelection, false, UseAmtsInAddCurr, SettlementNoFilter2);
         CurrPage.Update();

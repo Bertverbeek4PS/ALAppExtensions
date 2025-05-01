@@ -16,6 +16,7 @@ codeunit 148109 "Sales Advance Payments CZZ"
         LibraryCashDeskCZP: Codeunit "Library - Cash Desk CZP";
         LibraryCashDocumentCZP: Codeunit "Library - Cash Document CZP";
         LibraryDialogHandler: Codeunit "Library - Dialog Handler";
+        LibraryJob: Codeunit "Library - Job";
         LibraryJournals: Codeunit "Library - Journals";
         LibraryERM: Codeunit "Library - ERM";
         LibraryRandom: Codeunit "Library - Random";
@@ -403,9 +404,7 @@ codeunit 148109 "Sales Advance Payments CZZ"
         CreateAndPostPaymentSalesAdvLetter(SalesAdvLetterHeaderCZZ, -SalesAdvLetterLineCZZ."Amount Including VAT");
 
         // [WHEN] Unlink advance letter from payment
-        SalesAdvLetterEntryCZZ1.SetRange("Sales Adv. Letter No.", SalesAdvLetterHeaderCZZ."No.");
-        SalesAdvLetterEntryCZZ1.SetRange("Entry Type", Enum::"Advance Letter Entry Type CZZ"::Payment);
-        SalesAdvLetterEntryCZZ1.FindFirst();
+        FindLastPaymentAdvanceLetterEntry(SalesAdvLetterHeaderCZZ."No.", SalesAdvLetterEntryCZZ1);
         LibrarySalesAdvancesCZZ.UnlinkSalesAdvancePayment(SalesAdvLetterEntryCZZ1);
 
         // [THEN] Sales advance letter entries will be create. One of the type "Payment" and the other of the "VAT Payment".
@@ -690,6 +689,9 @@ codeunit 148109 "Sales Advance Payments CZZ"
         // [SCENARIO] Link sales advance letter with reverse charge to invoice
         Initialize();
 
+        // [GIVEN] Posting of VAT documents for reverse charge has been enabled
+        SetPostVATDocForReverseCharge(true);
+
         // [GIVEN] Sales advance letter  has been created
         // [GIVEN] Sales advance letter line with reverse charge has been created
         CreateSalesAdvLetterWithReverseCharge(SalesAdvLetterHeaderCZZ, SalesAdvLetterLineCZZ);
@@ -736,6 +738,8 @@ codeunit 148109 "Sales Advance Payments CZZ"
         // [THEN] Sales advance letter will be closed
         SalesAdvLetterHeaderCZZ.Get(SalesAdvLetterHeaderCZZ."No.");
         SalesAdvLetterHeaderCZZ.TestField(Status, SalesAdvLetterHeaderCZZ.Status::Closed);
+
+        SetPostVATDocForReverseCharge(false);
     end;
 
     [Test]
@@ -1805,6 +1809,970 @@ codeunit 148109 "Sales Advance Payments CZZ"
         SalesAdvLetterHeaderCZZ.TestField(Status, SalesAdvLetterHeaderCZZ.Status::Closed);
     end;
 
+    [Test]
+    procedure VATPaymentToSalesAdvLetterWithTwoVATRates()
+    var
+        SalesAdvLetterHeaderCZZ: Record "Sales Adv. Letter Header CZZ";
+        SalesAdvLetterLineCZZ1: Record "Sales Adv. Letter Line CZZ";
+        SalesAdvLetterLineCZZ2: Record "Sales Adv. Letter Line CZZ";
+        SalesAdvLetterEntryCZZ1: Record "Sales Adv. Letter Entry CZZ";
+        SalesAdvLetterEntryCZZ2: Record "Sales Adv. Letter Entry CZZ";
+        VATPostingSetup: Record "VAT Posting Setup";
+    begin
+        // [SCENARIO] VAT payment to Sales advance letter with two VAT rates
+        Initialize();
+
+        // [GIVEN] Sales advance letter has been created
+        // [GIVEN] Sales advance letter line with normal VAT has been created
+        CreateSalesAdvLetter(SalesAdvLetterHeaderCZZ, SalesAdvLetterLineCZZ1);
+
+        // [GIVEN] Second Sales advance letter line with normal VAT has been created
+        FindNextVATPostingSetup(VATPostingSetup);
+        LibrarySalesAdvancesCZZ.CreateSalesAdvLetterLine(
+            SalesAdvLetterLineCZZ2, SalesAdvLetterHeaderCZZ, VATPostingSetup."VAT Prod. Posting Group", LibraryRandom.RandDec(1000, 2));
+
+        // [GIVEN] Sales advance letter has been released
+        LibrarySalesAdvancesCZZ.ReleaseSalesAdvLetter(SalesAdvLetterHeaderCZZ);
+
+        // [WHEN] Create and post payment of sales advance letter
+        SalesAdvLetterHeaderCZZ.CalcFields("Amount Including VAT");
+        CreateAndPostPaymentSalesAdvLetter(SalesAdvLetterHeaderCZZ, -SalesAdvLetterHeaderCZZ."Amount Including VAT");
+
+        // [THEN] Two Sales advance letter entries of "VAT Payment" type will exist
+        SalesAdvLetterEntryCZZ1.SetRange("Sales Adv. Letter No.", SalesAdvLetterHeaderCZZ."No.");
+        SalesAdvLetterEntryCZZ1.SetRange("Entry Type", SalesAdvLetterEntryCZZ1."Entry Type"::"VAT Payment");
+        Assert.RecordCount(SalesAdvLetterEntryCZZ1, 2);
+
+        // [THEN] Sum of amounts in Sales advance letter entries will be the same as in entry with "Payment" type
+        SalesAdvLetterEntryCZZ2.SetRange("Sales Adv. Letter No.", SalesAdvLetterHeaderCZZ."No.");
+        SalesAdvLetterEntryCZZ2.SetRange("Entry Type", SalesAdvLetterEntryCZZ2."Entry Type"::Payment);
+        SalesAdvLetterEntryCZZ2.FindLast();
+        SalesAdvLetterEntryCZZ1.CalcSums(Amount);
+        Assert.AreEqual(SalesAdvLetterEntryCZZ1.Amount, SalesAdvLetterEntryCZZ2.Amount, 'The sum of amounts in Sales advance letter entries must be the same as in entry with "Payment" type.');
+    end;
+
+    [Test]
+    procedure UnlinkAdvancePaymentFromSalesAdvLetterWithTwoLines()
+    var
+        SalesAdvLetterHeaderCZZ: Record "Sales Adv. Letter Header CZZ";
+        SalesAdvLetterLineCZZ1: Record "Sales Adv. Letter Line CZZ";
+        SalesAdvLetterLineCZZ2: Record "Sales Adv. Letter Line CZZ";
+        SalesAdvLetterEntryCZZ1: Record "Sales Adv. Letter Entry CZZ";
+        SalesAdvLetterEntryCZZ2: Record "Sales Adv. Letter Entry CZZ";
+        VATPostingSetup: Record "VAT Posting Setup";
+    begin
+        // [SCENARIO] Unlink advance payment from Sales advance letter with two lines
+        Initialize();
+
+        // [GIVEN] Sales advance letter has been created
+        // [GIVEN] Sales advance letter line with normal VAT has been created
+        CreateSalesAdvLetter(SalesAdvLetterHeaderCZZ, SalesAdvLetterLineCZZ1);
+
+        // [GIVEN] Second Sales advance letter line with normal VAT has been created
+        FindNextVATPostingSetup(VATPostingSetup);
+        LibrarySalesAdvancesCZZ.CreateSalesAdvLetterLine(
+            SalesAdvLetterLineCZZ2, SalesAdvLetterHeaderCZZ, VATPostingSetup."VAT Prod. Posting Group", LibraryRandom.RandDec(1000, 2));
+
+        // [GIVEN] Sales advance letter has been released
+        LibrarySalesAdvancesCZZ.ReleaseSalesAdvLetter(SalesAdvLetterHeaderCZZ);
+
+        // [GIVEN] Sales advance letter has been paid in full by the general journal
+        SalesAdvLetterHeaderCZZ.CalcFields("Amount Including VAT");
+        CreateAndPostPaymentSalesAdvLetter(SalesAdvLetterHeaderCZZ, -SalesAdvLetterHeaderCZZ."Amount Including VAT");
+
+        // [WHEN] Unlink advance letter from payment
+        FindLastPaymentAdvanceLetterEntry(SalesAdvLetterHeaderCZZ."No.", SalesAdvLetterEntryCZZ1);
+        LibrarySalesAdvancesCZZ.UnlinkSalesAdvancePayment(SalesAdvLetterEntryCZZ1);
+
+        // [THEN] Sales advance letter entries of "Payment" and "VAT Payment" type with opposite sign will exist
+        SalesAdvLetterEntryCZZ2.SetRange("Sales Adv. Letter No.", SalesAdvLetterHeaderCZZ."No.");
+        SalesAdvLetterEntryCZZ2.Find('+');
+        Assert.AreEqual(SalesAdvLetterEntryCZZ2."Entry Type"::Payment, SalesAdvLetterEntryCZZ2."Entry Type", 'The Sales advance letter entry must be of type "Payment".');
+        Assert.AreEqual(-SalesAdvLetterEntryCZZ1.Amount, SalesAdvLetterEntryCZZ2.Amount, 'The amount must have the opposite sign.');
+        Assert.AreEqual(SalesAdvLetterEntryCZZ1."Entry No.", SalesAdvLetterEntryCZZ2."Related Entry", 'The entry must be related to entry of "Payment" type');
+
+        SalesAdvLetterEntryCZZ2.Next(-1);
+        Assert.AreEqual(SalesAdvLetterEntryCZZ2."Entry Type"::"VAT Payment", SalesAdvLetterEntryCZZ2."Entry Type", 'The Sales advance letter entry must be of type "VAT Payment".');
+        Assert.AreEqual(SalesAdvLetterLineCZZ2."Amount Including VAT", SalesAdvLetterEntryCZZ2.Amount, 'The amount must have the opposite sign.');
+
+        SalesAdvLetterEntryCZZ2.Next(-1);
+        Assert.AreEqual(SalesAdvLetterEntryCZZ2."Entry Type"::"VAT Payment", SalesAdvLetterEntryCZZ2."Entry Type", 'The Sales advance letter entry must be of type "VAT Payment".');
+        Assert.AreEqual(SalesAdvLetterLineCZZ1."Amount Including VAT", SalesAdvLetterEntryCZZ2.Amount, 'The amount must have the opposite sign.');
+
+        SalesAdvLetterEntryCZZ2.SetFilter("Entry Type", '%1|%2',
+            SalesAdvLetterEntryCZZ2."Entry Type"::Payment, SalesAdvLetterEntryCZZ2."Entry Type"::"VAT Payment");
+        SalesAdvLetterEntryCZZ2.CalcSums(Amount);
+        Assert.AreEqual(0, SalesAdvLetterEntryCZZ2.Amount, 'The sum of amounts in Sales advance letter entries must be zero.');
+
+        // [THEN] Sales advance letter status will be "To Pay"
+        SalesAdvLetterHeaderCZZ.Get(SalesAdvLetterHeaderCZZ."No.");
+        SalesAdvLetterHeaderCZZ.TestField(Status, SalesAdvLetterHeaderCZZ.Status::"To Pay");
+    end;
+
+    [Test]
+    procedure CreateSalesAdvLetterWithTwoLinesAndLinkToInvoice()
+    var
+        SalesAdvLetterHeaderCZZ: Record "Sales Adv. Letter Header CZZ";
+        SalesAdvLetterLineCZZ1: Record "Sales Adv. Letter Line CZZ";
+        SalesAdvLetterLineCZZ2: Record "Sales Adv. Letter Line CZZ";
+        SalesAdvLetterEntryCZZ: Record "Sales Adv. Letter Entry CZZ";
+        SalesHeader: Record "Sales Header";
+        SalesLine: Record "Sales Line";
+        VATEntry: Record "VAT Entry";
+        VATPostingSetup: Record "VAT Posting Setup";
+        PostedDocumentNo: Code[20];
+    begin
+        // [SCENARIO] Create Sales advance letter with two lines and link to invoice with line which is the same as first line in advance letter
+        Initialize();
+
+        // [GIVEN] Sales advance letter has been created
+        // [GIVEN] Sales advance letter line with normal VAT has been created
+        CreateSalesAdvLetter(SalesAdvLetterHeaderCZZ, SalesAdvLetterLineCZZ1);
+
+        // [GIVEN] Second Sales advance letter line with normal VAT has been created
+        FindNextVATPostingSetup(VATPostingSetup);
+        LibrarySalesAdvancesCZZ.CreateSalesAdvLetterLine(
+            SalesAdvLetterLineCZZ2, SalesAdvLetterHeaderCZZ, VATPostingSetup."VAT Prod. Posting Group", LibraryRandom.RandDec(1000, 2));
+
+        // [GIVEN] Sales advance letter has been released
+        LibrarySalesAdvancesCZZ.ReleaseSalesAdvLetter(SalesAdvLetterHeaderCZZ);
+
+        // [GIVEN] Sales advance letter has been paid in full by the general journal
+        SalesAdvLetterHeaderCZZ.CalcFields("Amount Including VAT");
+        CreateAndPostPaymentSalesAdvLetter(SalesAdvLetterHeaderCZZ, -SalesAdvLetterHeaderCZZ."Amount Including VAT");
+
+        // [GIVEN] Sales invoice has been created
+        // [GIVEN] Sales invoice line has been created
+        LibrarySalesAdvancesCZZ.CreateSalesInvoice(
+            SalesHeader, SalesLine, SalesAdvLetterHeaderCZZ."Bill-to Customer No.", SalesAdvLetterHeaderCZZ."Posting Date",
+            SalesAdvLetterLineCZZ1."VAT Bus. Posting Group", SalesAdvLetterLineCZZ1."VAT Prod. Posting Group", '', 0,
+            true, SalesAdvLetterLineCZZ1."Amount Including VAT");
+
+        // [GIVEN] Whole advance letter has been linked to Sales invoice
+        LibrarySalesAdvancesCZZ.LinkSalesAdvanceLetterToDocument(
+            SalesAdvLetterHeaderCZZ, Enum::"Adv. Letter Usage Doc.Type CZZ"::"Sales Invoice", SalesHeader."No.",
+            SalesAdvLetterLineCZZ1."Amount Including VAT", SalesAdvLetterLineCZZ1."Amount Including VAT (LCY)");
+
+        // [WHEN] Post Sales invoice
+        PostedDocumentNo := PostSalesDocument(SalesHeader);
+
+        // [THEN] VAT entries of Sales invoice will exist
+        VATEntry.Reset();
+        VATEntry.SetRange("Document No.", PostedDocumentNo);
+        VATEntry.SetRange("Posting Date", SalesHeader."Posting Date");
+        VATEntry.SetRange("Advance Letter No. CZZ", '');
+        Assert.RecordIsNotEmpty(VATEntry);
+
+        // [THEN] VAT entries of advance letter will exist
+        VATEntry.SetRange("Advance Letter No. CZZ", SalesAdvLetterHeaderCZZ."No.");
+        Assert.RecordIsNotEmpty(VATEntry);
+
+        // [THEN] Sum of base and VAT amounts in VAT entries will be zero
+        VATEntry.SetRange("Advance Letter No. CZZ");
+        VATEntry.CalcSums(Base, Amount);
+        Assert.AreEqual(0, VATEntry.Base, 'The sum of base amount in VAT Entries must be zero.');
+        Assert.AreEqual(0, VATEntry.Amount, 'The sum of VAT amount in VAT Entries must be zero.');
+
+        // [THEN] Only one Sales advance letter entry of "VAT Usage" type will exist
+        SalesAdvLetterEntryCZZ.SetRange("Sales Adv. Letter No.", SalesAdvLetterHeaderCZZ."No.");
+        SalesAdvLetterEntryCZZ.SetRange("Entry Type", SalesAdvLetterEntryCZZ."Entry Type"::"VAT Usage");
+        Assert.RecordCount(SalesAdvLetterEntryCZZ, 1);
+
+        // [THEN] Sum of amounts in Sales advance letter entries of "VAT payment" and "VAT usage" type will be zero
+        SalesAdvLetterEntryCZZ.FindFirst();
+        SalesAdvLetterEntryCZZ.SetRange("VAT Bus. Posting Group", SalesAdvLetterEntryCZZ."VAT Bus. Posting Group");
+        SalesAdvLetterEntryCZZ.SetRange("VAT Prod. Posting Group", SalesAdvLetterEntryCZZ."VAT Prod. Posting Group");
+        SalesAdvLetterEntryCZZ.SetFilter("Entry Type", '%1|%2',
+            SalesAdvLetterEntryCZZ."Entry Type"::"VAT Usage", SalesAdvLetterEntryCZZ."Entry Type"::"VAT Payment");
+        SalesAdvLetterEntryCZZ.CalcSums(Amount);
+        Assert.AreEqual(0, SalesAdvLetterEntryCZZ.Amount, 'The sum of amounts in Sales advance letter entries must be zero.');
+    end;
+
+    [Test]
+    procedure CreateSalesAdvLetterWithTwoLinesAndLinkToInvoice2()
+    var
+        SalesAdvLetterHeaderCZZ: Record "Sales Adv. Letter Header CZZ";
+        SalesAdvLetterLineCZZ1: Record "Sales Adv. Letter Line CZZ";
+        SalesAdvLetterLineCZZ2: Record "Sales Adv. Letter Line CZZ";
+        SalesAdvLetterEntryCZZ: Record "Sales Adv. Letter Entry CZZ";
+        SalesHeader: Record "Sales Header";
+        SalesLine: Record "Sales Line";
+        VATEntry: Record "VAT Entry";
+        VATPostingSetup: Record "VAT Posting Setup";
+        PostedDocumentNo: Code[20];
+    begin
+        // [SCENARIO] Create Sales advance letter with two lines and link to invoice with line which is the same as second line in advance letter
+        Initialize();
+
+        // [GIVEN] Sales advance letter has been created
+        // [GIVEN] Sales advance letter line with normal VAT has been created
+        CreateSalesAdvLetter(SalesAdvLetterHeaderCZZ, SalesAdvLetterLineCZZ1);
+
+        // [GIVEN] Second Sales advance letter line with normal VAT has been created
+        FindNextVATPostingSetup(VATPostingSetup);
+        LibrarySalesAdvancesCZZ.CreateSalesAdvLetterLine(
+            SalesAdvLetterLineCZZ2, SalesAdvLetterHeaderCZZ, VATPostingSetup."VAT Prod. Posting Group", LibraryRandom.RandDec(1000, 2));
+
+        // [GIVEN] Sales advance letter has been released
+        LibrarySalesAdvancesCZZ.ReleaseSalesAdvLetter(SalesAdvLetterHeaderCZZ);
+
+        // [GIVEN] Sales advance letter has been paid in full by the general journal
+        SalesAdvLetterHeaderCZZ.CalcFields("Amount Including VAT");
+        CreateAndPostPaymentSalesAdvLetter(SalesAdvLetterHeaderCZZ, -SalesAdvLetterHeaderCZZ."Amount Including VAT");
+
+        // [GIVEN] Sales invoice has been created
+        // [GIVEN] Sales invoice line has been created
+        LibrarySalesAdvancesCZZ.CreateSalesInvoice(
+            SalesHeader, SalesLine, SalesAdvLetterHeaderCZZ."Bill-to Customer No.", SalesAdvLetterHeaderCZZ."Posting Date",
+            SalesAdvLetterLineCZZ2."VAT Bus. Posting Group", SalesAdvLetterLineCZZ2."VAT Prod. Posting Group", '', 0,
+            true, SalesAdvLetterLineCZZ2."Amount Including VAT");
+
+        // [GIVEN] Whole advance letter has been linked to Sales invoice
+        LibrarySalesAdvancesCZZ.LinkSalesAdvanceLetterToDocument(
+            SalesAdvLetterHeaderCZZ, Enum::"Adv. Letter Usage Doc.Type CZZ"::"Sales Invoice", SalesHeader."No.",
+            SalesAdvLetterLineCZZ2."Amount Including VAT", SalesAdvLetterLineCZZ2."Amount Including VAT (LCY)");
+
+        // [WHEN] Post Sales invoice
+        PostedDocumentNo := PostSalesDocument(SalesHeader);
+
+        // [THEN] VAT entries of Sales invoice will exist
+        VATEntry.Reset();
+        VATEntry.SetRange("Document No.", PostedDocumentNo);
+        VATEntry.SetRange("Posting Date", SalesHeader."Posting Date");
+        VATEntry.SetRange("Advance Letter No. CZZ", '');
+        Assert.RecordIsNotEmpty(VATEntry);
+
+        // [THEN] VAT entries of advance letter will exist
+        VATEntry.SetRange("Advance Letter No. CZZ", SalesAdvLetterHeaderCZZ."No.");
+        Assert.RecordIsNotEmpty(VATEntry);
+
+        // [THEN] Sum of base and VAT amounts in VAT entries will be zero
+        VATEntry.SetRange("Advance Letter No. CZZ");
+        VATEntry.CalcSums(Base, Amount);
+        Assert.AreEqual(0, VATEntry.Base, 'The sum of base amount in VAT Entries must be zero.');
+        Assert.AreEqual(0, VATEntry.Amount, 'The sum of VAT amount in VAT Entries must be zero.');
+
+        // [THEN] Only one Sales advance letter entry of "VAT Usage" type will exist
+        SalesAdvLetterEntryCZZ.SetRange("Sales Adv. Letter No.", SalesAdvLetterHeaderCZZ."No.");
+        SalesAdvLetterEntryCZZ.SetRange("Entry Type", SalesAdvLetterEntryCZZ."Entry Type"::"VAT Usage");
+        Assert.RecordCount(SalesAdvLetterEntryCZZ, 1);
+
+        // [THEN] Sum of amounts in Sales advance letter entries of "VAT payment" and "VAT usage" type will be zero
+        SalesAdvLetterEntryCZZ.FindFirst();
+        SalesAdvLetterEntryCZZ.SetRange("VAT Bus. Posting Group", SalesAdvLetterEntryCZZ."VAT Bus. Posting Group");
+        SalesAdvLetterEntryCZZ.SetRange("VAT Prod. Posting Group", SalesAdvLetterEntryCZZ."VAT Prod. Posting Group");
+        SalesAdvLetterEntryCZZ.SetFilter("Entry Type", '%1|%2',
+            SalesAdvLetterEntryCZZ."Entry Type"::"VAT Usage", SalesAdvLetterEntryCZZ."Entry Type"::"VAT Payment");
+        SalesAdvLetterEntryCZZ.CalcSums(Amount);
+        Assert.AreEqual(0, SalesAdvLetterEntryCZZ.Amount, 'The sum of amounts in Sales advance letter entries must be zero.');
+    end;
+
+    [Test]
+    procedure VATPaymentToSalesAdvLetterWithTwoVATRatesPartiallyPaid()
+    var
+        SalesAdvLetterHeaderCZZ: Record "Sales Adv. Letter Header CZZ";
+        SalesAdvLetterLineCZZ1: Record "Sales Adv. Letter Line CZZ";
+        SalesAdvLetterLineCZZ2: Record "Sales Adv. Letter Line CZZ";
+        SalesAdvLetterEntryCZZ1: Record "Sales Adv. Letter Entry CZZ";
+        SalesAdvLetterEntryCZZ2: Record "Sales Adv. Letter Entry CZZ";
+        VATPostingSetup: Record "VAT Posting Setup";
+    begin
+        // [SCENARIO] VAT payment to Sales advance letter with two VAT rates partially paid
+        Initialize();
+
+        // [GIVEN] Sales advance letter has been created
+        // [GIVEN] Sales advance letter line with normal VAT has been created
+        CreateSalesAdvLetter(SalesAdvLetterHeaderCZZ, SalesAdvLetterLineCZZ1);
+
+        // [GIVEN] Second Sales advance letter line with normal VAT has been created
+        FindNextVATPostingSetup(VATPostingSetup);
+        LibrarySalesAdvancesCZZ.CreateSalesAdvLetterLine(
+            SalesAdvLetterLineCZZ2, SalesAdvLetterHeaderCZZ, VATPostingSetup."VAT Prod. Posting Group", LibraryRandom.RandDec(1000, 2));
+
+        // [GIVEN] Sales advance letter has been released
+        LibrarySalesAdvancesCZZ.ReleaseSalesAdvLetter(SalesAdvLetterHeaderCZZ);
+
+        // [GIVEN] Sales advance letter has been half paid by the general journal
+        SalesAdvLetterHeaderCZZ.CalcFields("Amount Including VAT");
+        CreateAndPostPaymentSalesAdvLetter(SalesAdvLetterHeaderCZZ,
+            Round(-SalesAdvLetterLineCZZ1."Amount Including VAT" / 2) +
+            Round(-SalesAdvLetterLineCZZ2."Amount Including VAT" / 2));
+
+        // [THEN] Two Sales advance letter entries of "VAT Payment" type will exist
+        SalesAdvLetterEntryCZZ1.SetRange("Sales Adv. Letter No.", SalesAdvLetterHeaderCZZ."No.");
+        SalesAdvLetterEntryCZZ1.SetRange("Entry Type", SalesAdvLetterEntryCZZ1."Entry Type"::"VAT Payment");
+        Assert.RecordCount(SalesAdvLetterEntryCZZ1, 2);
+
+        // [THEN] Sum of amounts in Sales advance letter entries will be the same as in entry with "Payment" type
+        SalesAdvLetterEntryCZZ2.SetRange("Sales Adv. Letter No.", SalesAdvLetterHeaderCZZ."No.");
+        SalesAdvLetterEntryCZZ2.SetRange("Entry Type", SalesAdvLetterEntryCZZ2."Entry Type"::Payment);
+        SalesAdvLetterEntryCZZ2.FindLast();
+        SalesAdvLetterEntryCZZ1.CalcSums(Amount);
+        Assert.AreEqual(SalesAdvLetterEntryCZZ1.Amount, SalesAdvLetterEntryCZZ2.Amount, 'The sum of amounts in Sales advance letter entries must be the same as in entry with "Payment" type.');
+    end;
+
+    [Test]
+    procedure CreateSalesAdvLetterWithTwoLinesAndLinkToInvoiceWithLowerAmount()
+    var
+        GLAccount: Record "G/L Account";
+        SalesAdvLetterHeaderCZZ: Record "Sales Adv. Letter Header CZZ";
+        SalesAdvLetterLineCZZ1: Record "Sales Adv. Letter Line CZZ";
+        SalesAdvLetterLineCZZ2: Record "Sales Adv. Letter Line CZZ";
+        SalesAdvLetterEntryCZZ1: Record "Sales Adv. Letter Entry CZZ";
+        SalesAdvLetterEntryCZZ2: Record "Sales Adv. Letter Entry CZZ";
+        SalesHeader: Record "Sales Header";
+        SalesLine1: Record "Sales Line";
+        SalesLine2: Record "Sales Line";
+        VATEntry: Record "VAT Entry";
+        VATPostingSetup: Record "VAT Posting Setup";
+        PostedDocumentNo: Code[20];
+    begin
+        // [SCENARIO] Create Sales advance letter with two lines and link to invoice with amount lower than advance letter
+        Initialize();
+
+        // [GIVEN] Sales advance letter has been created
+        // [GIVEN] Sales advance letter line with normal VAT has been created
+        CreateSalesAdvLetter(SalesAdvLetterHeaderCZZ, SalesAdvLetterLineCZZ1);
+
+        // [GIVEN] Second Sales advance letter line with normal VAT has been created
+        FindNextVATPostingSetup(VATPostingSetup);
+        LibrarySalesAdvancesCZZ.CreateSalesAdvLetterLine(
+            SalesAdvLetterLineCZZ2, SalesAdvLetterHeaderCZZ, VATPostingSetup."VAT Prod. Posting Group", LibraryRandom.RandDec(1000, 2));
+
+        // [GIVEN] Sales advance letter has been released
+        LibrarySalesAdvancesCZZ.ReleaseSalesAdvLetter(SalesAdvLetterHeaderCZZ);
+
+        // [GIVEN] Sales advance letter has been paid in full by the general journal
+        SalesAdvLetterHeaderCZZ.CalcFields("Amount Including VAT");
+        CreateAndPostPaymentSalesAdvLetter(SalesAdvLetterHeaderCZZ, -SalesAdvLetterHeaderCZZ."Amount Including VAT");
+
+        // [GIVEN] Sales invoice has been created
+        // [GIVEN] First Sales invoice line with amount lower than first line of advance letter has been created
+        LibrarySalesAdvancesCZZ.CreateSalesInvoice(
+            SalesHeader, SalesLine1, SalesAdvLetterHeaderCZZ."Bill-to Customer No.", SalesAdvLetterHeaderCZZ."Posting Date",
+            SalesAdvLetterLineCZZ1."VAT Bus. Posting Group", SalesAdvLetterLineCZZ1."VAT Prod. Posting Group", '', 0,
+            true, SalesAdvLetterLineCZZ1."Amount Including VAT" - 1);
+
+        // [GIVEN] Second Sales invoice line with amount lower than second line of advance letter has been created
+        LibrarySalesAdvancesCZZ.CreateGLAccount(GLAccount);
+        GLAccount.Validate("VAT Bus. Posting Group", SalesAdvLetterLineCZZ2."VAT Bus. Posting Group");
+        GLAccount.Validate("VAT Prod. Posting Group", SalesAdvLetterLineCZZ2."VAT Prod. Posting Group");
+        GLAccount.Modify(true);
+        LibrarySales.CreateSalesLine(SalesLine2, SalesHeader, SalesLine2.Type::"G/L Account", GLAccount."No.", 1);
+        SalesLine2.Validate("Unit Price", SalesAdvLetterLineCZZ2."Amount Including VAT" - 1);
+        SalesLine2.Modify(true);
+
+        // [GIVEN] Whole advance letter has been linked to Sales invoice
+        SalesAdvLetterHeaderCZZ.CalcFields("Amount Including VAT", "Amount Including VAT (LCY)");
+        LibrarySalesAdvancesCZZ.LinkSalesAdvanceLetterToDocument(
+            SalesAdvLetterHeaderCZZ, Enum::"Adv. Letter Usage Doc.Type CZZ"::"Sales Invoice", SalesHeader."No.",
+            SalesAdvLetterHeaderCZZ."Amount Including VAT", SalesAdvLetterHeaderCZZ."Amount Including VAT (LCY)");
+
+        // [WHEN] Post Sales invoice
+        PostedDocumentNo := PostSalesDocument(SalesHeader);
+
+        // [THEN] VAT entries of Sales invoice will exist
+        VATEntry.Reset();
+        VATEntry.SetRange("Document No.", PostedDocumentNo);
+        VATEntry.SetRange("Posting Date", SalesHeader."Posting Date");
+        VATEntry.SetRange("Advance Letter No. CZZ", '');
+        Assert.RecordIsNotEmpty(VATEntry);
+
+        // [THEN] VAT entries of advance letter will exist
+        VATEntry.SetRange("Advance Letter No. CZZ", SalesAdvLetterHeaderCZZ."No.");
+        Assert.RecordIsNotEmpty(VATEntry);
+
+        // [THEN] Sum of base and VAT amounts in VAT entries will be zero
+        VATEntry.SetRange("Advance Letter No. CZZ");
+        VATEntry.CalcSums(Base, Amount);
+        Assert.AreEqual(0, VATEntry.Base, 'The sum of base amount in VAT Entries must be zero.');
+        Assert.AreEqual(0, VATEntry.Amount, 'The sum of VAT amount in VAT Entries must be zero.');
+
+        // [THEN] One Sales advance letter entry of "Usage" type will exist
+        SalesAdvLetterEntryCZZ1.SetRange("Sales Adv. Letter No.", SalesAdvLetterHeaderCZZ."No.");
+        SalesAdvLetterEntryCZZ1.SetRange("Entry Type", SalesAdvLetterEntryCZZ1."Entry Type"::Usage);
+        Assert.RecordCount(SalesAdvLetterEntryCZZ1, 1);
+
+        // [THEN] Two Sales advance letter entries of "VAT Usage" type will exist
+        SalesAdvLetterEntryCZZ2.SetRange("Sales Adv. Letter No.", SalesAdvLetterHeaderCZZ."No.");
+        SalesAdvLetterEntryCZZ2.SetRange("Entry Type", SalesAdvLetterEntryCZZ2."Entry Type"::"VAT Usage");
+        Assert.RecordCount(SalesAdvLetterEntryCZZ2, 2);
+
+        // [THEN] Sum of amounts in Sales advance letter entries of "VAT Usage" type will be the same as in Usage type of entry
+        SalesAdvLetterEntryCZZ1.FindFirst();
+        SalesAdvLetterEntryCZZ2.CalcSums(Amount);
+        Assert.AreEqual(SalesAdvLetterEntryCZZ1.Amount, SalesAdvLetterEntryCZZ2.Amount, 'The sum of amounts in Sales advance letter entries must be the same as in entry with "Usage" type.');
+    end;
+
+    [Test]
+    procedure CreateSalesAdvLetterWithTwoDiffVATRatesAndLinkToInvoiceWithOneVATRate()
+    var
+        SalesAdvLetterHeaderCZZ: Record "Sales Adv. Letter Header CZZ";
+        SalesAdvLetterLineCZZ1: Record "Sales Adv. Letter Line CZZ";
+        SalesAdvLetterLineCZZ2: Record "Sales Adv. Letter Line CZZ";
+        SalesHeader: Record "Sales Header";
+        SalesLine: Record "Sales Line";
+        VATEntry: Record "VAT Entry";
+        VATPostingSetup: Record "VAT Posting Setup";
+        PostedDocumentNo: Code[20];
+        VATEntryCount: Integer;
+    begin
+        // [SCENARIO] Create Sales advance letter with two lines with different VAT rates and link to invoice with
+        //            with line which is the same as first line in advance letter and one VAT rate
+        Initialize();
+
+        // [GIVEN] Posting of VAT documents for reverse charge has been enabled
+        SetPostVATDocForReverseCharge(true);
+
+        // [GIVEN] Sales advance letter has been created
+        // [GIVEN] Sales advance letter line with normal VAT has been created
+        CreateSalesAdvLetter(SalesAdvLetterHeaderCZZ, SalesAdvLetterLineCZZ1);
+
+        // [GIVEN] Second Sales advance letter line with reverse charge has been created
+        LibrarySalesAdvancesCZZ.FindVATPostingSetupEU(VATPostingSetup);
+        LibrarySalesAdvancesCZZ.CreateSalesAdvLetterLine(
+            SalesAdvLetterLineCZZ2, SalesAdvLetterHeaderCZZ, VATPostingSetup."VAT Prod. Posting Group", LibraryRandom.RandDec(1000, 2));
+
+        // [GIVEN] Sales advance letter has been released
+        LibrarySalesAdvancesCZZ.ReleaseSalesAdvLetter(SalesAdvLetterHeaderCZZ);
+
+        // [GIVEN] Sales advance letter has been paid in full by the general journal
+        SalesAdvLetterHeaderCZZ.CalcFields("Amount Including VAT");
+        CreateAndPostPaymentSalesAdvLetter(SalesAdvLetterHeaderCZZ, -SalesAdvLetterHeaderCZZ."Amount Including VAT");
+
+        // [GIVEN] Sales invoice has been created
+        // [GIVEN] Sales invoice line by first line of advance letter has been created
+        LibrarySalesAdvancesCZZ.CreateSalesInvoice(
+            SalesHeader, SalesLine, SalesAdvLetterHeaderCZZ."Bill-to Customer No.", SalesAdvLetterHeaderCZZ."Posting Date",
+            SalesAdvLetterLineCZZ1."VAT Bus. Posting Group", SalesAdvLetterLineCZZ1."VAT Prod. Posting Group", '', 0,
+            true, SalesAdvLetterLineCZZ1."Amount Including VAT");
+
+        // [GIVEN] Whole advance letter has been linked to Sales invoice
+        LibrarySalesAdvancesCZZ.LinkSalesAdvanceLetterToDocument(
+            SalesAdvLetterHeaderCZZ, Enum::"Adv. Letter Usage Doc.Type CZZ"::"Sales Invoice", SalesHeader."No.",
+            SalesAdvLetterLineCZZ1."Amount Including VAT", SalesAdvLetterLineCZZ1."Amount Including VAT (LCY)");
+
+        // [WHEN] Post Sales invoice
+        PostedDocumentNo := PostSalesDocument(SalesHeader);
+
+        // [THEN] VAT entries of Sales invoice will exist
+        VATEntry.Reset();
+        VATEntry.SetRange("VAT Bus. Posting Group", SalesAdvLetterLineCZZ1."VAT Bus. Posting Group");
+        VATEntry.SetRange("VAT Prod. Posting Group", SalesAdvLetterLineCZZ1."VAT Prod. Posting Group");
+        VATEntry.SetRange("Document No.", PostedDocumentNo);
+        VATEntry.SetRange("Posting Date", SalesHeader."Posting Date");
+        VATEntry.SetRange("Advance Letter No. CZZ", '');
+        Assert.RecordIsNotEmpty(VATEntry);
+
+        // [THEN] VAT entries of advance letter will exist
+        VATEntry.SetRange("Advance Letter No. CZZ", SalesAdvLetterHeaderCZZ."No.");
+        Assert.RecordIsNotEmpty(VATEntry);
+
+        // [THEN] Sum of base and VAT amounts in VAT entries will be zero
+        VATEntry.SetRange("Advance Letter No. CZZ");
+        VATEntry.CalcSums(Base, Amount);
+        Assert.AreEqual(0, VATEntry.Base, 'The sum of base amount in VAT Entries must be zero.');
+        Assert.AreEqual(0, VATEntry.Amount, 'The sum of VAT amount in VAT Entries must be zero.');
+
+        // [THEN] All VAT entries will have the same VAT posting group
+        VATEntryCount := VATEntry.Count();
+        VATEntry.FindFirst();
+        VATEntry.SetRange("VAT Bus. Posting Group", VATEntry."VAT Bus. Posting Group");
+        VATEntry.SetRange("VAT Prod. Posting Group", VATEntry."VAT Prod. Posting Group");
+        Assert.RecordCount(VATEntry, VATEntryCount);
+
+        SetPostVATDocForReverseCharge(false);
+    end;
+
+    [Test]
+    procedure CreateSalesAdvLetterWithTwoDiffVATRatesAndLinkToInvoiceWithOneVATRate2()
+    var
+        SalesAdvLetterHeaderCZZ: Record "Sales Adv. Letter Header CZZ";
+        SalesAdvLetterLineCZZ1: Record "Sales Adv. Letter Line CZZ";
+        SalesAdvLetterLineCZZ2: Record "Sales Adv. Letter Line CZZ";
+        SalesHeader: Record "Sales Header";
+        SalesLine: Record "Sales Line";
+        VATEntry: Record "VAT Entry";
+        VATPostingSetup: Record "VAT Posting Setup";
+        PostedDocumentNo: Code[20];
+        VATEntryCount: Integer;
+    begin
+        // [SCENARIO] Create Sales advance letter with two lines with different VAT rates and link to invoice with line which is the same as second line in advance letter and one VAT rate
+        Initialize();
+
+        // [GIVEN] Posting of VAT documents for reverse charge has been enabled
+        SetPostVATDocForReverseCharge(true);
+
+        // [GIVEN] Sales advance letter has been created
+        // [GIVEN] Sales advance letter line with normal VAT has been created
+        CreateSalesAdvLetter(SalesAdvLetterHeaderCZZ, SalesAdvLetterLineCZZ1);
+
+        // [GIVEN] Second Sales advance letter line with reverse charge has been created
+        LibrarySalesAdvancesCZZ.FindVATPostingSetupEU(VATPostingSetup);
+        LibrarySalesAdvancesCZZ.CreateSalesAdvLetterLine(
+            SalesAdvLetterLineCZZ2, SalesAdvLetterHeaderCZZ, VATPostingSetup."VAT Prod. Posting Group", LibraryRandom.RandDec(1000, 2));
+
+        // [GIVEN] Sales advance letter has been released
+        LibrarySalesAdvancesCZZ.ReleaseSalesAdvLetter(SalesAdvLetterHeaderCZZ);
+
+        // [GIVEN] Sales advance letter has been paid in full by the general journal
+        SalesAdvLetterHeaderCZZ.CalcFields("Amount Including VAT");
+        CreateAndPostPaymentSalesAdvLetter(SalesAdvLetterHeaderCZZ, -SalesAdvLetterHeaderCZZ."Amount Including VAT");
+
+        // [GIVEN] Sales invoice has been created
+        // [GIVEN] Sales invoice line by first line of advance letter has been created
+        LibrarySalesAdvancesCZZ.CreateSalesInvoice(
+            SalesHeader, SalesLine, SalesAdvLetterHeaderCZZ."Bill-to Customer No.", SalesAdvLetterHeaderCZZ."Posting Date",
+            SalesAdvLetterLineCZZ2."VAT Bus. Posting Group", SalesAdvLetterLineCZZ2."VAT Prod. Posting Group", '', 0,
+            true, SalesAdvLetterLineCZZ2."Amount Including VAT");
+
+        // [GIVEN] Whole advance letter has been linked to Sales invoice
+        LibrarySalesAdvancesCZZ.LinkSalesAdvanceLetterToDocument(
+            SalesAdvLetterHeaderCZZ, Enum::"Adv. Letter Usage Doc.Type CZZ"::"Sales Invoice", SalesHeader."No.",
+            SalesAdvLetterLineCZZ2."Amount Including VAT", SalesAdvLetterLineCZZ2."Amount Including VAT (LCY)");
+
+        // [WHEN] Post Sales invoice
+        PostedDocumentNo := PostSalesDocument(SalesHeader);
+
+        // [THEN] VAT entries of Sales invoice will exist
+        VATEntry.Reset();
+        VATEntry.SetRange("VAT Bus. Posting Group", SalesAdvLetterLineCZZ2."VAT Bus. Posting Group");
+        VATEntry.SetRange("VAT Prod. Posting Group", SalesAdvLetterLineCZZ2."VAT Prod. Posting Group");
+        VATEntry.SetRange("Document No.", PostedDocumentNo);
+        VATEntry.SetRange("Posting Date", SalesHeader."Posting Date");
+        VATEntry.SetRange("Advance Letter No. CZZ", '');
+        Assert.RecordIsNotEmpty(VATEntry);
+
+        // [THEN] VAT entries of advance letter will exist
+        VATEntry.SetRange("Advance Letter No. CZZ", SalesAdvLetterHeaderCZZ."No.");
+        Assert.RecordIsNotEmpty(VATEntry);
+
+        // [THEN] Sum of base and VAT amounts in VAT entries will be zero
+        VATEntry.SetRange("Advance Letter No. CZZ");
+        VATEntry.CalcSums(Base, Amount);
+        Assert.AreEqual(0, VATEntry.Base, 'The sum of base amount in VAT Entries must be zero.');
+        Assert.AreEqual(0, VATEntry.Amount, 'The sum of VAT amount in VAT Entries must be zero.');
+
+        // [THEN] All VAT entries will have the same VAT posting group
+        VATEntryCount := VATEntry.Count();
+        VATEntry.FindFirst();
+        VATEntry.SetRange("VAT Bus. Posting Group", VATEntry."VAT Bus. Posting Group");
+        VATEntry.SetRange("VAT Prod. Posting Group", VATEntry."VAT Prod. Posting Group");
+        Assert.RecordCount(VATEntry, VATEntryCount);
+
+        SetPostVATDocForReverseCharge(false);
+    end;
+
+    [Test]
+    procedure CreateSalesAdvLetterWithTwoDiffVATRatesAndLinkToInvoiceWithOneVATRate3()
+    var
+        SalesAdvLetterEntryCZZ1: Record "Sales Adv. Letter Entry CZZ";
+        SalesAdvLetterEntryCZZ2: Record "Sales Adv. Letter Entry CZZ";
+        SalesAdvLetterHeaderCZZ: Record "Sales Adv. Letter Header CZZ";
+        SalesAdvLetterLineCZZ1: Record "Sales Adv. Letter Line CZZ";
+        SalesAdvLetterLineCZZ2: Record "Sales Adv. Letter Line CZZ";
+        SalesHeader: Record "Sales Header";
+        SalesLine: Record "Sales Line";
+        VATPostingSetup: Record "VAT Posting Setup";
+    begin
+        // [SCENARIO] Create Sales advance letter with two lines with different VAT rates and link to invoice with line which has the higher amount as first line in advance letter and one VAT rate
+        Initialize();
+
+        // [GIVEN] Posting of VAT documents for reverse charge has been enabled
+        SetPostVATDocForReverseCharge(true);
+
+        // [GIVEN] Sales advance letter has been created
+        // [GIVEN] Sales advance letter line with normal VAT has been created
+        CreateSalesAdvLetter(SalesAdvLetterHeaderCZZ, SalesAdvLetterLineCZZ1);
+
+        // [GIVEN] Second Sales advance letter line with reverse charge has been created
+        LibrarySalesAdvancesCZZ.FindVATPostingSetupEU(VATPostingSetup);
+        LibrarySalesAdvancesCZZ.CreateSalesAdvLetterLine(
+            SalesAdvLetterLineCZZ2, SalesAdvLetterHeaderCZZ, VATPostingSetup."VAT Prod. Posting Group", LibraryRandom.RandDec(1000, 2));
+
+        // [GIVEN] Sales advance letter has been released
+        LibrarySalesAdvancesCZZ.ReleaseSalesAdvLetter(SalesAdvLetterHeaderCZZ);
+
+        // [GIVEN] Sales advance letter has been paid in full by the general journal
+        SalesAdvLetterHeaderCZZ.CalcFields("Amount Including VAT", "Amount Including VAT (LCY)");
+        CreateAndPostPaymentSalesAdvLetter(SalesAdvLetterHeaderCZZ, -SalesAdvLetterHeaderCZZ."Amount Including VAT");
+
+        // [GIVEN] Sales invoice has been created
+        // [GIVEN] Sales invoice line with amount higher than first line of advance letter has been created
+        LibrarySalesAdvancesCZZ.CreateSalesInvoice(
+            SalesHeader, SalesLine, SalesAdvLetterHeaderCZZ."Bill-to Customer No.", SalesAdvLetterHeaderCZZ."Posting Date",
+            SalesAdvLetterLineCZZ1."VAT Bus. Posting Group", SalesAdvLetterLineCZZ1."VAT Prod. Posting Group", '', 0,
+            true, SalesAdvLetterLineCZZ1."Amount Including VAT" + 1);
+
+        // [GIVEN] Whole advance letter has been linked to Sales invoice
+        LibrarySalesAdvancesCZZ.LinkSalesAdvanceLetterToDocument(
+            SalesAdvLetterHeaderCZZ, Enum::"Adv. Letter Usage Doc.Type CZZ"::"Sales Invoice", SalesHeader."No.",
+            SalesAdvLetterHeaderCZZ."Amount Including VAT", SalesAdvLetterHeaderCZZ."Amount Including VAT (LCY)");
+
+        // [WHEN] Post Sales invoice
+        PostSalesDocument(SalesHeader);
+
+        // [THEN] Amount in Sales advance letter entry of "VAT Payment" type will be the sames as in entry with "VAT Usage" type of the same VAT posting group as in first line of advance letter
+        SalesAdvLetterEntryCZZ1.SetRange("Sales Adv. Letter No.", SalesAdvLetterHeaderCZZ."No.");
+        SalesAdvLetterEntryCZZ1.SetRange("VAT Bus. Posting Group", SalesAdvLetterLineCZZ1."VAT Bus. Posting Group");
+        SalesAdvLetterEntryCZZ1.SetRange("VAT Prod. Posting Group", SalesAdvLetterLineCZZ1."VAT Prod. Posting Group");
+        SalesAdvLetterEntryCZZ1.SetRange("Entry Type", SalesAdvLetterEntryCZZ1."Entry Type"::"VAT Payment");
+        SalesAdvLetterEntryCZZ1.FindFirst();
+
+        SalesAdvLetterEntryCZZ2.SetRange("Sales Adv. Letter No.", SalesAdvLetterHeaderCZZ."No.");
+        SalesAdvLetterEntryCZZ2.SetRange("VAT Bus. Posting Group", SalesLine."VAT Bus. Posting Group");
+        SalesAdvLetterEntryCZZ2.SetRange("VAT Prod. Posting Group", SalesLine."VAT Prod. Posting Group");
+        SalesAdvLetterEntryCZZ2.SetRange("Entry Type", SalesAdvLetterEntryCZZ2."Entry Type"::"VAT Usage");
+        SalesAdvLetterEntryCZZ2.FindFirst();
+        Assert.AreEqual(SalesAdvLetterEntryCZZ1.Amount, -SalesAdvLetterEntryCZZ2.Amount, 'The amount in Sales advance letter entry of "VAT Payment" type must be the same as in entry with "VAT Usage" type.');
+
+        // [THEN] Sales advance letter entry of "VAT Usage" type with the same VAT posting group as in second line of advance letter will exist
+        SalesAdvLetterEntryCZZ2.SetRange("Sales Adv. Letter No.", SalesAdvLetterHeaderCZZ."No.");
+        SalesAdvLetterEntryCZZ2.SetRange("VAT Bus. Posting Group", SalesAdvLetterLineCZZ2."VAT Bus. Posting Group");
+        SalesAdvLetterEntryCZZ2.SetRange("VAT Prod. Posting Group", SalesAdvLetterLineCZZ2."VAT Prod. Posting Group");
+        SalesAdvLetterEntryCZZ2.SetRange("Entry Type", SalesAdvLetterEntryCZZ2."Entry Type"::"VAT Usage");
+        Assert.RecordIsNotEmpty(SalesAdvLetterEntryCZZ2);
+
+        SetPostVATDocForReverseCharge(false);
+    end;
+
+    [Test]
+    procedure CreateSalesAdvLetterWithTwoDiffVATRatesAndLinkToInvoiceWithOneVATRate4()
+    var
+        SalesAdvLetterEntryCZZ1: Record "Sales Adv. Letter Entry CZZ";
+        SalesAdvLetterEntryCZZ2: Record "Sales Adv. Letter Entry CZZ";
+        SalesAdvLetterHeaderCZZ: Record "Sales Adv. Letter Header CZZ";
+        SalesAdvLetterLineCZZ1: Record "Sales Adv. Letter Line CZZ";
+        SalesAdvLetterLineCZZ2: Record "Sales Adv. Letter Line CZZ";
+        SalesHeader: Record "Sales Header";
+        SalesLine: Record "Sales Line";
+        VATPostingSetup: Record "VAT Posting Setup";
+    begin
+        // [SCENARIO] Create Sales advance letter with two lines with different VAT rates and link to invoice with line which has the higher amount as second line in advance letter and one VAT rate
+        Initialize();
+
+        // [GIVEN] Posting of VAT documents for reverse charge has been enabled
+        SetPostVATDocForReverseCharge(true);
+
+        // [GIVEN] Sales advance letter has been created
+        // [GIVEN] Sales advance letter line with normal VAT has been created
+        CreateSalesAdvLetter(SalesAdvLetterHeaderCZZ, SalesAdvLetterLineCZZ1);
+
+        // [GIVEN] Second Sales advance letter line with reverse charge has been created
+        LibrarySalesAdvancesCZZ.FindVATPostingSetupEU(VATPostingSetup);
+        LibrarySalesAdvancesCZZ.CreateSalesAdvLetterLine(
+            SalesAdvLetterLineCZZ2, SalesAdvLetterHeaderCZZ, VATPostingSetup."VAT Prod. Posting Group", LibraryRandom.RandDec(1000, 2));
+
+        // [GIVEN] Sales advance letter has been released
+        LibrarySalesAdvancesCZZ.ReleaseSalesAdvLetter(SalesAdvLetterHeaderCZZ);
+
+        // [GIVEN] Sales advance letter has been paid in full by the general journal
+        SalesAdvLetterHeaderCZZ.CalcFields("Amount Including VAT", "Amount Including VAT (LCY)");
+        CreateAndPostPaymentSalesAdvLetter(SalesAdvLetterHeaderCZZ, -SalesAdvLetterHeaderCZZ."Amount Including VAT");
+
+        // [GIVEN] Sales invoice has been created
+        // [GIVEN] Sales invoice line with amount higher than second line of advance letter has been created
+        LibrarySalesAdvancesCZZ.CreateSalesInvoice(
+            SalesHeader, SalesLine, SalesAdvLetterHeaderCZZ."Bill-to Customer No.", SalesAdvLetterHeaderCZZ."Posting Date",
+            SalesAdvLetterLineCZZ2."VAT Bus. Posting Group", SalesAdvLetterLineCZZ2."VAT Prod. Posting Group", '', 0,
+            true, SalesAdvLetterLineCZZ2."Amount Including VAT" + 1);
+
+        // [GIVEN] Whole advance letter has been linked to Sales invoice
+        LibrarySalesAdvancesCZZ.LinkSalesAdvanceLetterToDocument(
+            SalesAdvLetterHeaderCZZ, Enum::"Adv. Letter Usage Doc.Type CZZ"::"Sales Invoice", SalesHeader."No.",
+            SalesAdvLetterHeaderCZZ."Amount Including VAT", SalesAdvLetterHeaderCZZ."Amount Including VAT (LCY)");
+
+        // [WHEN] Post Sales invoice
+        PostSalesDocument(SalesHeader);
+
+        // [THEN] Amount in Sales advance letter entry of "VAT Payment" type will be the same as in entry with "VAT Usage" type of the same VAT posting group as in second line of advance letter
+        SalesAdvLetterEntryCZZ1.SetRange("Sales Adv. Letter No.", SalesAdvLetterHeaderCZZ."No.");
+        SalesAdvLetterEntryCZZ1.SetRange("VAT Bus. Posting Group", SalesAdvLetterLineCZZ2."VAT Bus. Posting Group");
+        SalesAdvLetterEntryCZZ1.SetRange("VAT Prod. Posting Group", SalesAdvLetterLineCZZ2."VAT Prod. Posting Group");
+        SalesAdvLetterEntryCZZ1.SetRange("Entry Type", SalesAdvLetterEntryCZZ1."Entry Type"::"VAT Payment");
+        SalesAdvLetterEntryCZZ1.FindFirst();
+
+        SalesAdvLetterEntryCZZ2.SetRange("Sales Adv. Letter No.", SalesAdvLetterHeaderCZZ."No.");
+        SalesAdvLetterEntryCZZ2.SetRange("VAT Bus. Posting Group", SalesLine."VAT Bus. Posting Group");
+        SalesAdvLetterEntryCZZ2.SetRange("VAT Prod. Posting Group", SalesLine."VAT Prod. Posting Group");
+        SalesAdvLetterEntryCZZ2.SetRange("Entry Type", SalesAdvLetterEntryCZZ2."Entry Type"::"VAT Usage");
+        SalesAdvLetterEntryCZZ2.FindFirst();
+        Assert.AreEqual(SalesAdvLetterEntryCZZ1.Amount, -SalesAdvLetterEntryCZZ2.Amount, 'The amount in Sales advance letter entry of "VAT Payment" type must be the same as in entry with "VAT Usage" type.');
+
+        // [THEN] Sales advance letter entry of "VAT Usage" type with the same VAT posting group as in first line of advance letter will exist
+        SalesAdvLetterEntryCZZ2.SetRange("Sales Adv. Letter No.", SalesAdvLetterHeaderCZZ."No.");
+        SalesAdvLetterEntryCZZ2.SetRange("VAT Bus. Posting Group", SalesAdvLetterLineCZZ1."VAT Bus. Posting Group");
+        SalesAdvLetterEntryCZZ2.SetRange("VAT Prod. Posting Group", SalesAdvLetterLineCZZ1."VAT Prod. Posting Group");
+        SalesAdvLetterEntryCZZ2.SetRange("Entry Type", SalesAdvLetterEntryCZZ2."Entry Type"::"VAT Usage");
+        Assert.RecordIsNotEmpty(SalesAdvLetterEntryCZZ2);
+
+        SetPostVATDocForReverseCharge(false);
+    end;
+
+    [Test]
+    procedure CreateSalesAdvLetterWithTwoDiffVATRatesAndLinkToInvoice()
+    var
+        GLAccount: Record "G/L Account";
+        SalesAdvLetterHeaderCZZ: Record "Sales Adv. Letter Header CZZ";
+        SalesAdvLetterLineCZZ1: Record "Sales Adv. Letter Line CZZ";
+        SalesAdvLetterLineCZZ2: Record "Sales Adv. Letter Line CZZ";
+        SalesHeader: Record "Sales Header";
+        SalesLine1: Record "Sales Line";
+        SalesLine2: Record "Sales Line";
+        VATEntry: Record "VAT Entry";
+        VATPostingSetup: Record "VAT Posting Setup";
+        PostedDocumentNo: Code[20];
+    begin
+        // [SCENARIO] Create Sales advance letter with two lines with different VAT rates and link to invoice with two lines which have the lower amounts as lines in advance letter
+        Initialize();
+
+        // [GIVEN] Posting of VAT documents for reverse charge has been enabled
+        SetPostVATDocForReverseCharge(true);
+
+        // [GIVEN] Sales advance letter has been created
+        // [GIVEN] Sales advance letter line with normal VAT has been created
+        CreateSalesAdvLetter(SalesAdvLetterHeaderCZZ, SalesAdvLetterLineCZZ1);
+
+        // [GIVEN] Second Sales advance letter line with reverse charge has been created
+        LibrarySalesAdvancesCZZ.FindVATPostingSetupEU(VATPostingSetup);
+        LibrarySalesAdvancesCZZ.CreateSalesAdvLetterLine(
+            SalesAdvLetterLineCZZ2, SalesAdvLetterHeaderCZZ, VATPostingSetup."VAT Prod. Posting Group", LibraryRandom.RandDec(1000, 2));
+
+        // [GIVEN] Sales advance letter has been released
+        LibrarySalesAdvancesCZZ.ReleaseSalesAdvLetter(SalesAdvLetterHeaderCZZ);
+
+        // [GIVEN] Sales advance letter has been paid in full by the general journal
+        SalesAdvLetterHeaderCZZ.CalcFields("Amount Including VAT", "Amount Including VAT (LCY)");
+        CreateAndPostPaymentSalesAdvLetter(SalesAdvLetterHeaderCZZ, -SalesAdvLetterHeaderCZZ."Amount Including VAT");
+
+        // [GIVEN] Sales invoice has been created
+        // [GIVEN] First Sales invoice line with amount lower than first line of advance letter has been created
+        LibrarySalesAdvancesCZZ.CreateSalesInvoice(
+            SalesHeader, SalesLine1, SalesAdvLetterHeaderCZZ."Bill-to Customer No.", SalesAdvLetterHeaderCZZ."Posting Date",
+            SalesAdvLetterLineCZZ1."VAT Bus. Posting Group", SalesAdvLetterLineCZZ1."VAT Prod. Posting Group", '', 0,
+            true, SalesAdvLetterLineCZZ1."Amount Including VAT" - 1);
+
+        // [GIVEN] Second Sales invoice line with amount lower than second line of advance letter has been created
+        LibrarySalesAdvancesCZZ.CreateGLAccount(GLAccount);
+        GLAccount.Validate("VAT Bus. Posting Group", SalesAdvLetterLineCZZ2."VAT Bus. Posting Group");
+        GLAccount.Validate("VAT Prod. Posting Group", SalesAdvLetterLineCZZ2."VAT Prod. Posting Group");
+        GLAccount.Modify(true);
+        LibrarySales.CreateSalesLine(SalesLine2, SalesHeader, SalesLine2.Type::"G/L Account", GLAccount."No.", 1);
+        SalesLine2.Validate("Unit Price", SalesAdvLetterLineCZZ2."Amount Including VAT" - 1);
+        SalesLine2.Modify(true);
+
+        // [GIVEN] Whole advance letter has been linked to Sales invoice
+        LibrarySalesAdvancesCZZ.LinkSalesAdvanceLetterToDocument(
+            SalesAdvLetterHeaderCZZ, Enum::"Adv. Letter Usage Doc.Type CZZ"::"Sales Invoice", SalesHeader."No.",
+            SalesAdvLetterHeaderCZZ."Amount Including VAT", SalesAdvLetterHeaderCZZ."Amount Including VAT (LCY)");
+
+        // [WHEN] Post Sales invoice
+        PostedDocumentNo := PostSalesDocument(SalesHeader);
+
+        // [THEN] VAT entries of Sales invoice will exist
+        VATEntry.Reset();
+        VATEntry.SetRange("Document No.", PostedDocumentNo);
+        VATEntry.SetRange("Posting Date", SalesHeader."Posting Date");
+        VATEntry.SetRange("Advance Letter No. CZZ", '');
+        Assert.RecordIsNotEmpty(VATEntry);
+
+        // [THEN] VAT entries of advance letter will exist
+        VATEntry.SetRange("Advance Letter No. CZZ", SalesAdvLetterHeaderCZZ."No.");
+        Assert.RecordIsNotEmpty(VATEntry);
+
+        // [THEN] Sum of base and VAT amounts in VAT entries will be zero
+        VATEntry.SetRange("Advance Letter No. CZZ");
+        VATEntry.CalcSums(Base, Amount);
+        Assert.AreEqual(0, VATEntry.Base, 'The sum of base amount in VAT Entries must be zero.');
+        Assert.AreEqual(0, VATEntry.Amount, 'The sum of VAT amount in VAT Entries must be zero.');
+
+        // [THEN] Sum of base and VAT amount in VAT entries with the same VAT posting group as in first line of advance letter will be zero
+        VATEntry.SetRange("VAT Bus. Posting Group", SalesAdvLetterLineCZZ1."VAT Bus. Posting Group");
+        VATEntry.SetRange("VAT Prod. Posting Group", SalesAdvLetterLineCZZ1."VAT Prod. Posting Group");
+        VATEntry.CalcSums(Base, Amount);
+        Assert.AreEqual(0, VATEntry.Base, 'The sum of base amount in VAT Entries must be zero.');
+        Assert.AreEqual(0, VATEntry.Amount, 'The sum of VAT amount in VAT Entries must be zero.');
+
+        // [THEN] Sum of base and VAT amount in VAT entries with the same VAT posting group as in second line of advance letter will be zero
+        VATEntry.SetRange("VAT Bus. Posting Group", SalesAdvLetterLineCZZ2."VAT Bus. Posting Group");
+        VATEntry.SetRange("VAT Prod. Posting Group", SalesAdvLetterLineCZZ2."VAT Prod. Posting Group");
+        VATEntry.CalcSums(Base, Amount);
+        Assert.AreEqual(0, VATEntry.Base, 'The sum of base amount in VAT Entries must be zero.');
+        Assert.AreEqual(0, VATEntry.Amount, 'The sum of VAT amount in VAT Entries must be zero.');
+
+        SetPostVATDocForReverseCharge(false);
+    end;
+
+    [Test]
+    [HandlerFunctions('CreateSalesAdvLetterHandler,ConfirmHandler')]
+    procedure CreateSalesAdvanceLetterFromJobFor100Per()
+    begin
+        // [SCENARIO] Create sales advance letter from project for 100% of amount
+        // [GIVEN] Project has been created
+        // [GIVEN] Project task has been created
+        // [GIVEN] Project planning line has been created
+        // [GIVEN] Sales advance letter for 100% has been created from project
+        // [WHEN] Release sales advance letter
+        // [THEN] Sales advance letter will be created for 100% of project amount
+        // [THEN] Sales advance letter will be linked with project
+        CreateSalesAdvanceLetterFromJobForAdvancePer(100);
+    end;
+
+    [Test]
+    [HandlerFunctions('CreateSalesAdvLetterHandler,ConfirmHandler')]
+    procedure CreateSalesAdvanceLetterFromJobFor80Per()
+    begin
+        // [SCENARIO] Create sales advance letter from project for 80% of amount
+        // [GIVEN] Project has been created
+        // [GIVEN] Project task has been created
+        // [GIVEN] Project planning line has been created
+        // [GIVEN] Sales advance letter for 80% has been created from project
+        // [WHEN] Release sales advance letter
+        // [THEN] Sales advance letter will be created for 80% of project amount
+        // [THEN] Sales advance letter will be linked with project
+        CreateSalesAdvanceLetterFromJobForAdvancePer(80);
+    end;
+
+    procedure CreateSalesAdvanceLetterFromJobForAdvancePer(AdvancePer: Decimal)
+    var
+        Currency: Record Currency;
+        Job: Record Job;
+        JobTask: Record "Job Task";
+        JobPlanningLine: Record "Job Planning Line";
+        SalesAdvLetterHeaderCZZ: Record "Sales Adv. Letter Header CZZ";
+        AdvanceAmount: Decimal;
+    begin
+        Initialize();
+
+        LibraryJob.CreateJob(Job);
+        LibraryJob.CreateJobTask(Job, JobTask);
+        LibraryJob.CreateJobPlanningLine(
+            "Job Planning Line Line Type"::Billable, "Job Planning Line Type"::"G/L Account", JobTask, JobPlanningLine);
+
+        SetExpectedConfirm(OpenAdvanceLetterQst, false);
+        CreateSalesAdvLetterFrom(Job, AdvanceLetterTemplateCZZ.Code, AdvancePer, 0, false, SalesAdvLetterHeaderCZZ);
+        Currency.InitRoundingPrecision();
+        AdvanceAmount := Round(JobPlanningLine.CalcLineAmountIncludingVAT() * (AdvancePer / 100), Currency."Amount Rounding Precision");
+
+        LibrarySalesAdvancesCZZ.ReleaseSalesAdvLetter(SalesAdvLetterHeaderCZZ);
+
+        SalesAdvLetterHeaderCZZ.CalcFields("Amount Including VAT");
+        SalesAdvLetterHeaderCZZ.TestField("Amount Including VAT", AdvanceAmount);
+        SalesAdvLetterHeaderCZZ.TestField(Status, SalesAdvLetterHeaderCZZ.Status::"To Pay");
+        SalesAdvLetterHeaderCZZ.TestField("Job No.", Job."No.");
+    end;
+
+    [Test]
+    [HandlerFunctions('CreateSalesAdvLetterHandler,ConfirmHandler')]
+    procedure CreateSalesAdvanceLetterFromJobTaskFor100Per()
+    begin
+        // [SCENARIO] Create sales advance letter from project task for 100% of amount
+        // [GIVEN] Project has been created
+        // [GIVEN] First project task has been created
+        // [GIVEN] First project planning line has been created
+        // [GIVEN] Second project task has been created
+        // [GIVEN] Second project planning line has been created
+        // [GIVEN] Sales advance letter for 100% has been created from first project task
+        // [WHEN] Release sales advance letter
+        // [THEN] Sales advance letter will be created for 100% of first project task amount
+        // [THEN] Sales advance letter will be linked with first project task
+        CreateSalesAdvanceLetterFromJobTaskForAdvancePer(100);
+    end;
+
+    [Test]
+    [HandlerFunctions('CreateSalesAdvLetterHandler,ConfirmHandler')]
+    procedure CreateSalesAdvanceLetterFromJobTaskFor80Per()
+    begin
+        // [SCENARIO] Create sales advance letter from project task for 80% of amount
+        // [GIVEN] Project has been created
+        // [GIVEN] First project task has been created
+        // [GIVEN] First project planning line has been created
+        // [GIVEN] Second project task has been created
+        // [GIVEN] Second project planning line has been created
+        // [GIVEN] Sales advance letter for 80% has been created from first project task
+        // [WHEN] Release sales advance letter
+        // [THEN] Sales advance letter will be created for 80% of first project task amount
+        // [THEN] Sales advance letter will be linked with first project task
+        CreateSalesAdvanceLetterFromJobTaskForAdvancePer(80);
+    end;
+
+    procedure CreateSalesAdvanceLetterFromJobTaskForAdvancePer(AdvancePer: Decimal)
+    var
+        Currency: Record Currency;
+        Job: Record Job;
+        JobTask1: Record "Job Task";
+        JobTask2: Record "Job Task";
+        JobPlanningLine1: Record "Job Planning Line";
+        JobPlanningLine2: Record "Job Planning Line";
+        SalesAdvLetterHeaderCZZ: Record "Sales Adv. Letter Header CZZ";
+        AdvanceAmount: Decimal;
+    begin
+        Initialize();
+
+        LibraryJob.CreateJob(Job);
+        LibraryJob.CreateJobTask(Job, JobTask1);
+        LibraryJob.CreateJobPlanningLine(
+            "Job Planning Line Line Type"::Billable, "Job Planning Line Type"::"G/L Account", JobTask1, JobPlanningLine1);
+        LibraryJob.CreateJobTask(Job, JobTask2);
+        LibraryJob.CreateJobPlanningLine(
+            "Job Planning Line Line Type"::Billable, "Job Planning Line Type"::"G/L Account", JobTask2, JobPlanningLine2);
+
+        SetExpectedConfirm(OpenAdvanceLetterQst, false);
+        CreateSalesAdvLetterFrom(JobTask1, AdvanceLetterTemplateCZZ.Code, AdvancePer, 0, false, SalesAdvLetterHeaderCZZ);
+        Currency.InitRoundingPrecision();
+        AdvanceAmount := Round(JobPlanningLine1.CalcLineAmountIncludingVAT() * (AdvancePer / 100), Currency."Amount Rounding Precision");
+
+        LibrarySalesAdvancesCZZ.ReleaseSalesAdvLetter(SalesAdvLetterHeaderCZZ);
+
+        SalesAdvLetterHeaderCZZ.CalcFields("Amount Including VAT");
+        SalesAdvLetterHeaderCZZ.TestField("Amount Including VAT", AdvanceAmount);
+        SalesAdvLetterHeaderCZZ.TestField(Status, SalesAdvLetterHeaderCZZ.Status::"To Pay");
+        SalesAdvLetterHeaderCZZ.TestField("Job No.", JobTask1."Job No.");
+        SalesAdvLetterHeaderCZZ.TestField("Job Task No.", JobTask1."Job Task No.");
+    end;
+
+    [Test]
+    [HandlerFunctions('CreateSalesAdvLetterHandler,ConfirmHandler')]
+    procedure CopySalesReturnFromPostedInvoiceWithGLRoundingLineWhenPostSalesOrderWithSalesAdvLetter()
+    var
+        SalesAdvLetterHeaderCZZ: Record "Sales Adv. Letter Header CZZ";
+        SalesInvoiceHeader: Record "Sales Invoice Header";
+        SalesHeader: array[2] of Record "Sales Header";
+        SalesLine: array[2] of Record "Sales Line";
+        CopyDocumentMgt: Codeunit "Copy Document Mgt.";
+        DocumentNo: Code[20];
+    begin
+        // [SCENARIO 562031] Verify Copy Sales Return Order From Posted Sales Invoice With GL Rounding Line 
+        // When Post Sales Order With Sales Advance Letter.
+        Initialize();
+
+        // [GIVEN] Create a Sales Order With Multiple Line.
+        CreateSalesOrderWithMultipleLine(SalesHeader[1], SalesLine);
+
+        // [GIVEN] Sales Advance Letter from Sales Order has been created.
+        SetExpectedConfirm(OpenAdvanceLetterQst, false);
+        CreateSalesAdvLetterFromOrderWithAdvancePer(SalesHeader[1], AdvanceLetterTemplateCZZ.Code, 100, true, SalesAdvLetterHeaderCZZ);
+
+        // [GIVEN] Sales Advance Letter has been released.
+        LibrarySalesAdvancesCZZ.ReleaseSalesAdvLetter(SalesAdvLetterHeaderCZZ);
+
+        // [GIVEN] Sales advance has been Paid.
+        SalesHeader[1].CalcFields("Amount Including VAT");
+        CreateAndPostPaymentSalesAdvLetter(SalesAdvLetterHeaderCZZ, -SalesHeader[1]."Amount Including VAT");
+
+        // [WHEN] Post Sales Order.
+        DocumentNo := ShipAndPostSalesLine(SalesHeader[1], SalesLine);
+        SalesInvoiceHeader.Get(DocumentNo);
+
+        // [GIVEN] Create a Sales Return Order.
+        LibrarySales.CreateSalesHeader(SalesHeader[2], SalesHeader[2]."Document Type"::"Return Order", SalesInvoiceHeader."Sell-to Customer No.");
+        SalesHeader[2].Validate("Prices Including VAT", SalesInvoiceHeader."Prices Including VAT");
+        SalesHeader[2].Modify(true);
+
+        // [THEN] Verify no error occur when Copy the Document from Posted Sales Invoice to Sales Return Order.
+        CopyDocumentMgt.CopySalesDoc("Sales Document Type From"::"Posted Invoice", DocumentNo, SalesHeader[2]);
+    end;
+
     local procedure CreateSalesAdvLetterBase(var SalesAdvLetterHeaderCZZ: Record "Sales Adv. Letter Header CZZ"; var SalesAdvLetterLineCZZ: Record "Sales Adv. Letter Line CZZ"; CustomerNo: Code[20]; CurrencyCode: Code[10]; VATPostingSetup: Record "VAT Posting Setup")
     var
         Customer: Record Customer;
@@ -1851,23 +2819,20 @@ codeunit 148109 "Sales Advance Payments CZZ"
 
     local procedure CreateSalesAdvLetterFromOrderWithAdvanceAmount(var SalesHeader: Record "Sales Header"; AdvanceLetterCode: Code[20]; AdvanceAmount: Decimal; SuggestByLine: Boolean; var SalesAdvLetterHeaderCZZ: Record "Sales Adv. Letter Header CZZ")
     begin
-        CreateSalesAdvLetterFromOrder(SalesHeader, AdvanceLetterCode, 0, AdvanceAmount, SuggestByLine, SalesAdvLetterHeaderCZZ);
+        CreateSalesAdvLetterFrom(SalesHeader, AdvanceLetterCode, 0, AdvanceAmount, SuggestByLine, SalesAdvLetterHeaderCZZ);
     end;
 
     local procedure CreateSalesAdvLetterFromOrderWithAdvancePer(var SalesHeader: Record "Sales Header"; AdvanceLetterCode: Code[20]; AdvancePer: Decimal; SuggestByLine: Boolean; var SalesAdvLetterHeaderCZZ: Record "Sales Adv. Letter Header CZZ")
     begin
-        CreateSalesAdvLetterFromOrder(SalesHeader, AdvanceLetterCode, AdvancePer, 0, SuggestByLine, SalesAdvLetterHeaderCZZ);
+        CreateSalesAdvLetterFrom(SalesHeader, AdvanceLetterCode, AdvancePer, 0, SuggestByLine, SalesAdvLetterHeaderCZZ);
     end;
 
-    local procedure CreateSalesAdvLetterFromOrder(var SalesHeader: Record "Sales Header"; AdvanceLetterCode: Code[20]; AdvancePer: Decimal; AdvanceAmount: Decimal; SuggestByLine: Boolean; var SalesAdvLetterHeaderCZZ: Record "Sales Adv. Letter Header CZZ")
+    local procedure CreateSalesAdvLetterFrom(var SalesHeader: Record "Sales Header"; AdvanceLetterCode: Code[20]; AdvancePer: Decimal; AdvanceAmount: Decimal; SuggestByLine: Boolean; var SalesAdvLetterHeaderCZZ: Record "Sales Adv. Letter Header CZZ")
     var
         AdvanceLetterApplicationCZZ: Record "Advance Letter Application CZZ";
     begin
         Commit();
-        LibraryVariableStorage.Enqueue(AdvanceLetterCode);
-        LibraryVariableStorage.Enqueue(AdvancePer);
-        LibraryVariableStorage.Enqueue(AdvanceAmount);
-        LibraryVariableStorage.Enqueue(SuggestByLine);
+        InitCreateSalesAdvLetter(AdvanceLetterCode, AdvancePer, AdvanceAmount, SuggestByLine);
         LibrarySalesAdvancesCZZ.CreateSalesAdvanceLetterFromOrder(SalesHeader);
 
         AdvanceLetterApplicationCZZ.SetRange("Advance Letter Type", AdvanceLetterApplicationCZZ."Advance Letter Type"::Sales);
@@ -1875,6 +2840,35 @@ codeunit 148109 "Sales Advance Payments CZZ"
         AdvanceLetterApplicationCZZ.SetRange("Document No.", SalesHeader."No.");
         AdvanceLetterApplicationCZZ.FindFirst();
         SalesAdvLetterHeaderCZZ.Get(AdvanceLetterApplicationCZZ."Advance Letter No.");
+    end;
+
+    local procedure CreateSalesAdvLetterFrom(var Job: Record Job; AdvanceLetterCode: Code[20]; AdvancePer: Decimal; AdvanceAmount: Decimal; SuggestByLine: Boolean; var SalesAdvLetterHeaderCZZ: Record "Sales Adv. Letter Header CZZ")
+    begin
+        Commit();
+        InitCreateSalesAdvLetter(AdvanceLetterCode, AdvancePer, AdvanceAmount, SuggestByLine);
+        LibrarySalesAdvancesCZZ.CreateSalesAdvanceLetterFromJob(Job);
+
+        SalesAdvLetterHeaderCZZ.SetRange("Job No.", Job."No.");
+        SalesAdvLetterHeaderCZZ.FindFirst();
+    end;
+
+    local procedure CreateSalesAdvLetterFrom(var JobTask: Record "Job Task"; AdvanceLetterCode: Code[20]; AdvancePer: Decimal; AdvanceAmount: Decimal; SuggestByLine: Boolean; var SalesAdvLetterHeaderCZZ: Record "Sales Adv. Letter Header CZZ")
+    begin
+        Commit();
+        InitCreateSalesAdvLetter(AdvanceLetterCode, AdvancePer, AdvanceAmount, SuggestByLine);
+        LibrarySalesAdvancesCZZ.CreateSalesAdvanceLetterFromJobTask(JobTask);
+
+        SalesAdvLetterHeaderCZZ.SetRange("Job No.", JobTask."Job No.");
+        SalesAdvLetterHeaderCZZ.SetRange("Job Task No.", JobTask."Job Task No.");
+        SalesAdvLetterHeaderCZZ.FindFirst();
+    end;
+
+    local procedure InitCreateSalesAdvLetter(AdvanceLetterCode: Code[20]; AdvancePer: Decimal; AdvanceAmount: Decimal; SuggestByLine: Boolean)
+    begin
+        LibraryVariableStorage.Enqueue(AdvanceLetterCode);
+        LibraryVariableStorage.Enqueue(AdvancePer);
+        LibraryVariableStorage.Enqueue(AdvanceAmount);
+        LibraryVariableStorage.Enqueue(SuggestByLine);
     end;
 
     local procedure CreateAndPostPaymentSalesAdvLetter(var SalesAdvLetterHeaderCZZ: Record "Sales Adv. Letter Header CZZ"; Amount: Decimal; ExchangeRate: Decimal; PostingDate: Date): Decimal
@@ -1924,6 +2918,19 @@ codeunit 148109 "Sales Advance Payments CZZ"
     local procedure PostSalesDocument(var SalesHeader: Record "Sales Header"): Code[20]
     begin
         exit(LibrarySales.PostSalesDocument(SalesHeader, true, true));
+    end;
+
+    local procedure SetPostVATDocForReverseCharge(Value: Boolean)
+    begin
+        AdvanceLetterTemplateCZZ."Post VAT Doc. for Rev. Charge" := Value;
+        AdvanceLetterTemplateCZZ.Modify();
+    end;
+
+    local procedure FindLastPaymentAdvanceLetterEntry(AdvanceLetterNo: Code[20]; var SalesAdvLetterEntryCZZ: Record "Sales Adv. Letter Entry CZZ")
+    begin
+        SalesAdvLetterEntryCZZ.SetRange("Sales Adv. Letter No.", AdvanceLetterNo);
+        SalesAdvLetterEntryCZZ.SetRange("Entry Type", SalesAdvLetterEntryCZZ."Entry Type"::Payment);
+        SalesAdvLetterEntryCZZ.FindLast();
     end;
 
     local procedure SetExpectedConfirm(Question: Text; Reply: Boolean)
@@ -1986,6 +2993,65 @@ codeunit 148109 "Sales Advance Payments CZZ"
     local procedure PostCashDocument(var CashDocumentHeaderCZP: Record "Cash Document Header CZP")
     begin
         LibraryCashDocumentCZP.PostCashDocumentCZP(CashDocumentHeaderCZP);
+    end;
+
+    local procedure FindNextVATPostingSetup(var VATPostingSetup: Record "VAT Posting Setup")
+    begin
+        LibraryERM.FindVATPostingSetup(VATPostingSetup, VATPostingSetup."VAT Calculation Type"::"Normal VAT");
+        if VATPostingSetup.Next() = 0 then
+            LibraryERM.CreateVATPostingSetupWithAccounts(
+                VATPostingSetup, VATPostingSetup."VAT Calculation Type"::"Normal VAT", LibraryRandom.RandDecInDecimalRange(10, 25, 0));
+        LibrarySalesAdvancesCZZ.AddAdvLetterAccounsToVATPostingSetup(VATPostingSetup);
+    end;
+
+    local procedure CreateSalesOrderWithMultipleLine(var SalesHeader: Record "Sales Header"; var SalesLine: array[2] of Record "Sales Line")
+    var
+        VATPostingSetup: Record "VAT Posting Setup";
+    begin
+        LibrarySalesAdvancesCZZ.CreateSalesOrder(SalesHeader, SalesLine[1]);
+
+        VATPostingSetup.Get(SalesHeader."VAT Bus. Posting Group", SalesLine[1]."VAT Prod. Posting Group");
+        VATPostingSetup.Validate("VAT %", LibraryRandom.RandIntInRange(21, 21));
+        VATPostingSetup.Modify(true);
+
+        SalesHeader.Validate("Prices Including VAT", true);
+        SalesHeader.Modify(true);
+
+        SalesLine[1].Validate("No.");
+        SalesLine[1].Validate(Quantity, 1);
+        SalesLine[1].Validate("Unit Price", LibraryRandom.RandIntInRange(4000, 5000));
+        SalesLine[1].Validate("Line Discount %", LibraryRandom.RandInt(30));
+        SalesLine[1].Modify(true);
+
+        LibrarySales.CreateSalesLine(
+            SalesLine[2],
+            SalesHeader, SalesLine[2].Type::"G/L Account", SalesLine[1]."No.", SalesLine[1].Quantity);
+        SalesLine[2].Validate("Unit Price", LibraryRandom.RandIntInRange(1540, 1540));
+        SalesLine[2].Validate("Line Discount %", LibraryRandom.RandIntInRange(20, 20));
+        SalesLine[2].Modify(true);
+    end;
+
+    local procedure ShipAndPostSalesLine(SalesHeader: Record "Sales Header"; var SalesLine: array[2] of Record "Sales Line"): Code[20]
+    begin
+        // Ship First Sales Line.
+        SalesLine[1].Validate("Qty. to Invoice", 0);
+        SalesLine[1].Modify(true);
+        SalesLine[2].Validate("Qty. to Ship", 0);
+        SalesLine[2].Modify(true);
+        LibrarySales.PostSalesDocument(SalesHeader, true, false);
+
+        // Invoice First Sales Line.
+        SalesLine[2].Get(SalesLine[2]."Document Type"::Order, SalesLine[2]."Document No.", SalesLine[2]."Line No.");
+        SalesLine[2].Validate("Qty. to Ship", 0);
+        SalesLine[2].Modify(true);
+        LibrarySales.PostSalesDocument(SalesHeader, false, true);
+
+        // Ship and Invoice Second Sales Line.
+        SalesLine[2].Get(SalesLine[2]."Document Type"::Order, SalesLine[2]."Document No.", SalesLine[2]."Line No.");
+        SalesLine[2].Validate("Qty. to Ship", SalesLine[2].Quantity);
+        SalesLine[2].Modify(true);
+
+        exit(PostSalesDocument(SalesHeader));
     end;
 
     [RequestPageHandler]

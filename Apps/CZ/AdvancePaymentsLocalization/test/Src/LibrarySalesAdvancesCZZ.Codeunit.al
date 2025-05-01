@@ -225,7 +225,7 @@ codeunit 148009 "Library - Sales Advances CZZ"
         SalesAdvLetterManagementCZZ.CloseAdvanceLetter(SalesAdvLetterHeaderCZZ, PostingDate, VATDate, CurrencyFactor);
     end;
 
-    local procedure CreateGLAccount(var GLAccount: Record "G/L Account")
+    procedure CreateGLAccount(var GLAccount: Record "G/L Account")
     var
         GeneralPostingSetup: Record "General Posting Setup";
         VATPostingSetup: Record "VAT Posting Setup";
@@ -268,7 +268,7 @@ codeunit 148009 "Library - Sales Advances CZZ"
         AddAdvLetterAccounsToVATPostingSetup(VATPostingSetup);
     end;
 
-    local procedure AddAdvLetterAccounsToVATPostingSetup(var VATPostingSetup: Record "VAT Posting Setup")
+    procedure AddAdvLetterAccounsToVATPostingSetup(var VATPostingSetup: Record "VAT Posting Setup")
     begin
         VATPostingSetup.Validate("Sales Adv. Letter Account CZZ", GetNewGLAccountNo());
         VATPostingSetup.Validate("Sales Adv. Letter VAT Acc. CZZ", GetNewGLAccountNo());
@@ -280,6 +280,22 @@ codeunit 148009 "Library - Sales Advances CZZ"
         CreateSalesAdvLetterCZZ: Report "Create Sales Adv. Letter CZZ";
     begin
         CreateSalesAdvLetterCZZ.SetSalesHeader(SalesHeader);
+        CreateSalesAdvLetterCZZ.Run();
+    end;
+
+    procedure CreateSalesAdvanceLetterFromJob(var Job: Record Job)
+    var
+        CreateSalesAdvLetterCZZ: Report "Create Sales Adv. Letter CZZ";
+    begin
+        CreateSalesAdvLetterCZZ.SetJob(Job);
+        CreateSalesAdvLetterCZZ.Run();
+    end;
+
+    procedure CreateSalesAdvanceLetterFromJobTask(var JobTask: Record "Job Task")
+    var
+        CreateSalesAdvLetterCZZ: Report "Create Sales Adv. Letter CZZ";
+    begin
+        CreateSalesAdvLetterCZZ.SetJobTask(JobTask);
         CreateSalesAdvLetterCZZ.Run();
     end;
 

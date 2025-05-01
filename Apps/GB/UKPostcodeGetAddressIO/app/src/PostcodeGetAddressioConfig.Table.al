@@ -1,4 +1,4 @@
-﻿// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License. See License.txt in the project root for license information.
 // ------------------------------------------------------------------------------------------------
@@ -22,25 +22,25 @@ table 9092 "Postcode GetAddress.io Config"
         key(Key1; "Primary Key") { }
     }
 
-    [NonDebuggable]
+
     [Scope('OnPrem')]
-    procedure GetAPIKey(APIKeyGUID: Guid): Text
+    procedure GetAPIPasswordAsSecret(APIKeyGUID: Guid): SecretText
     var
-        APIPassword: Text;
+        APIPassword: SecretText;
     begin
         if IsNullGuid(APIKeyGUID) or not IsolatedStorage.Get(APIKeyGUID, Datascope::Company, APIPassword) then
-            exit('');
+            exit(APIPassword);
 
         exit(APIPassword);
     end;
 
-    [NonDebuggable]
+
     [Scope('OnPrem')]
-    procedure SaveAPIKey(var APIKeyGUID: Guid; APIKeyValue: Text[250])
+    procedure SaveAPIKeyAsSecret(var APIKeyGUID: Guid; APIKeyValue: SecretText)
     var
         FeatureTelemetry: Codeunit "Feature Telemetry";
     begin
-        if not IsNullGuid(APIKeyGUID) AND (APIKeyValue = '') then begin
+        if not IsNullGuid(APIKeyGUID) AND (APIKeyValue.IsEmpty()) then begin
             If IsolatedStorage.Contains(APIKeyGUID, Datascope::Company) then
                 IsolatedStorage.Delete(APIKeyGUID, Datascope::Company);
             Clear(APIKey);
@@ -58,5 +58,5 @@ table 9092 "Postcode GetAddress.io Config"
         end;
         Modify();
     end;
-}
 
+}

@@ -1,3 +1,14 @@
+// ------------------------------------------------------------------------------------------------
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License. See License.txt in the project root for license information.
+// ------------------------------------------------------------------------------------------------
+
+namespace Microsoft.DemoData.Service;
+
+using Microsoft.DemoTool.Helpers;
+using Microsoft.DemoData.Common;
+using Microsoft.Service.Resources;
+
 codeunit 5105 "Create Svc Resource"
 {
     InherentEntitlements = X;
@@ -8,6 +19,7 @@ codeunit 5105 "Create Svc Resource"
         SvcSetup: Codeunit "Create Svc Setup";
         ContosoResource: Codeunit "Contoso Resource";
         ContosoUoM: Codeunit "Create Common Unit Of Measure";
+        ContosoUtilities: Codeunit "Contoso Utilities";
         Resource1Tok: Label 'RESOURCE1', MaxLength = 20;
         Resource2Tok: Label 'RESOURCE2', MaxLength = 20;
 
@@ -24,12 +36,12 @@ codeunit 5105 "Create Svc Resource"
         CommonPostingGroup: Codeunit "Create Common Posting Group";
     begin
         if ServiceModuleSetup."Resource 1 No." = '' then begin
-            ContosoResource.InsertResource(Resource1(), Resource1(), ContosoUoM.Hour(), CommonPostingGroup.Service(), 50, 0, CommonPostingGroup.NonTaxable());
+            ContosoResource.InsertResource(Resource1(), Resource1(), ContosoUoM.Hour(), CommonPostingGroup.Service(), ContosoUtilities.AdjustPrice(50), 0, CommonPostingGroup.NonTaxable());
             ServiceModuleSetup.Validate("Resource 1 No.", Resource1());
         end;
 
         if ServiceModuleSetup."Resource 2 No." = '' then begin
-            ContosoResource.InsertResource(Resource2(), Resource2(), ContosoUoM.Hour(), CommonPostingGroup.Service(), 50, 0, CommonPostingGroup.NonTaxable());
+            ContosoResource.InsertResource(Resource2(), Resource2(), ContosoUoM.Hour(), CommonPostingGroup.Service(), ContosoUtilities.AdjustPrice(50), 0, CommonPostingGroup.NonTaxable());
             ServiceModuleSetup.Validate("Resource 2 No.", Resource2());
         end;
 

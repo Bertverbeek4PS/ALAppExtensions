@@ -161,11 +161,22 @@ page 31254 "Bank Statement CZB"
         }
         area(FactBoxes)
         {
+#if not CLEAN25
             part("Attached Documents"; "Document Attachment Factbox")
             {
+                ObsoleteTag = '25.0';
+                ObsoleteState = Pending;
+                ObsoleteReason = 'The "Document Attachment FactBox" has been replaced by "Doc. Attachment List Factbox", which supports multiple files upload.';
                 ApplicationArea = All;
                 Caption = 'Attachments';
-                SubPageLink = "Table ID" = const(31252), "No." = field("No.");
+                SubPageLink = "Table ID" = const(Database::"Bank Statement Header CZB"), "No." = field("No.");
+            }
+#endif
+            part("Attached Documents List"; "Doc. Attachment List Factbox")
+            {
+                ApplicationArea = All;
+                Caption = 'Documents';
+                SubPageLink = "Table ID" = const(Database::"Bank Statement Header CZB"), "No." = field("No.");
             }
             systempart(Links; Links)
             {
@@ -277,6 +288,20 @@ page 31254 "Bank Statement CZB"
                         IssueBankStatement(Codeunit::"Issue Bank Statement YesNo CZB");
                     end;
                 }
+                action(IssueAndCreateJournal)
+                {
+                    ApplicationArea = Basic, Suite;
+                    Caption = 'Issue and Create Journal';
+                    Ellipsis = true;
+                    Image = ReleaseDoc;
+                    ShortCutKey = 'Ctrl+F9';
+                    ToolTip = 'Issue the bank statement and create a journal. The bank statement will be moved to issued bank statements.';
+
+                    trigger OnAction()
+                    begin
+                        IssueBankStatement(Codeunit::"IssueBank.Stat.Create Jnl. CZB");
+                    end;
+                }
                 action(IssueAndPrint)
                 {
                     ApplicationArea = Basic, Suite;
@@ -323,6 +348,9 @@ page 31254 "Bank Statement CZB"
                 Caption = 'Issuing';
                 ShowAs = SplitButton;
                 actionref(Issue_Promoted; Issue)
+                {
+                }
+                actionref(IssueAndCreateJournal_Promoted; IssueAndCreateJournal)
                 {
                 }
                 actionref(IssueAndPrint_Promoted; IssueAndPrint)
@@ -393,9 +421,12 @@ page 31254 "Bank Statement CZB"
         Codeunit.Run(IssuingCodeunitId, Rec);
         CurrPage.Update(false);
 
-        if IssuingCodeunitId <> Codeunit::"Issue Bank Statement YesNo CZB" then
+        if (IssuingCodeunitId <> Codeunit::"Issue Bank Statement YesNo CZB") and
+           (IssuingCodeunitId <> Codeunit::"IssueBank.Stat.Create Jnl. CZB") then
             exit;
 
+        if ShowIssuedAndCreatedJnlConfirmationMessage(Rec."No.", IssuingCodeunitId) then
+            exit;
         if InstructionMgt.IsEnabled(InstructionMgtCZB.GetOpeningIssuedDocumentNotificationId()) then
             ShowIssuedConfirmationMessage(Rec."No.");
     end;
@@ -410,6 +441,31 @@ page 31254 "Bank Statement CZB"
                 Page.Run(Page::"Iss. Bank Statement CZB", IssBankStatementHeaderCZB);
     end;
 
+    local procedure ShowIssuedAndCreatedJnlConfirmationMessage(PreAssignedNo: Code[20]; IssuingCodeunitId: Integer): Boolean
+    var
+        IssBankStatementHeaderCZB: Record "Iss. Bank Statement Header CZB";
+        OpenCreatedJnlIssuedBankStmtQst: Label 'The bank statement has been issued and moved to the Issued Bank Statements window.\\Do you want to open the created journal and check it now?';
+    begin
+        if not InstructionMgt.IsEnabled(InstructionMgtCZB.ShowCreatedJnlIssBankStmtConfirmationMessageCode()) then
+            exit(false);
+
+        IssBankStatementHeaderCZB.SetRange("Pre-Assigned No.", PreAssignedNo);
+        if IssBankStatementHeaderCZB.FindFirst() then begin
+            if IssuingCodeunitId = Codeunit::"IssueBank.Stat.Create Jnl. CZB" then
+                if InstructionMgt.ShowConfirm(OpenCreatedJnlIssuedBankStmtQst, InstructionMgtCZB.ShowCreatedJnlIssBankStmtConfirmationMessageCode()) then begin
+                    IssBankStatementHeaderCZB.OpenReconciliationOrJournal();
+                    exit(true);
+                end;
+            if IssuingCodeunitId = Codeunit::"Issue Bank Statement YesNo CZB" then
+                if IssBankStatementHeaderCZB.PaymentReconcialiationOrGeneralJournalExist() then
+                    if InstructionMgt.ShowConfirm(OpenCreatedJnlIssuedBankStmtQst, InstructionMgtCZB.ShowCreatedJnlIssBankStmtConfirmationMessageCode()) then begin
+                        IssBankStatementHeaderCZB.OpenReconciliationOrJournal();
+                        exit(true)
+                    end;
+        end;
+    end;
+
+
     local procedure SetNoFieldVisible()
     begin
         if Rec."No." <> '' then
@@ -421,10 +477,8 @@ page 31254 "Bank Statement CZB"
     local procedure DetermineBankStatementCZBSeriesNo(): Code[20]
     var
         BankAccount: Record "Bank Account";
-        BankStatementHeaderCZB: Record "Bank Statement Header CZB";
     begin
         BankAccount.Get(Rec."Bank Account No.");
-        DocumentNoVisibility.CheckNumberSeries(BankStatementHeaderCZB, BankAccount."Bank Statement Nos. CZB", BankStatementHeaderCZB.FieldNo("No."));
         exit(BankAccount."Bank Statement Nos. CZB");
     end;
 

@@ -3,10 +3,6 @@ namespace Microsoft.Integration.Shopify;
 using Microsoft.Sales.Customer;
 using Microsoft.CRM.BusinessRelation;
 using Microsoft.Foundation.Address;
-#if not CLEAN22
-using System.IO;
-using Microsoft.Finance.Dimension;
-#endif
 
 /// <summary>
 /// Codeunit Shpfy Update Customer (ID 30124).
@@ -15,11 +11,6 @@ codeunit 30124 "Shpfy Update Customer"
 {
     Access = Internal;
     Permissions =
-#if not CLEAN22
-        tabledata "Config. Template Header" = r,
-        tabledata "Config. Template Line" = r,
-        tabledata "Dimensions Template" = r,
-#endif
         tabledata "Country/Region" = r,
         tabledata Customer = rim;
 
@@ -28,6 +19,7 @@ codeunit 30124 "Shpfy Update Customer"
     var
         Shop: Record "Shpfy Shop";
         CustomerEvents: Codeunit "Shpfy Customer Events";
+        NoLocationErr: Label 'No location was found for Shopify company id: %1', Comment = 'Shopify should not be translated. %1 = Shopify company id';
 
     trigger OnRun()
     var
@@ -86,7 +78,7 @@ codeunit 30124 "Shpfy Update Customer"
         if Customer.Name = '' then
             Customer.Validate(Name, IName.GetName(CustomerAddress."First Name", CustomerAddress."Last Name", CustomerAddress.Company))
         else
-            Customer.Validate("Name 2", IName.GetName(CustomerAddress."First Name", CustomerAddress."Last Name", CustomerAddress.Company));
+            Customer.Validate("Name 2", CopyStr(IName.GetName(CustomerAddress."First Name", CustomerAddress."Last Name", CustomerAddress.Company), 1, MaxStrLen(Customer."Name 2")));
 
         IName := Shop."Contact Source";
         Customer.Validate(Contact, IName.GetName(CustomerAddress."First Name", CustomerAddress."Last Name", CustomerAddress.Company));
@@ -130,6 +122,55 @@ codeunit 30124 "Shpfy Update Customer"
         end;
     end;
 
+    internal procedure UpdateCustomerFromCompany(var ShopifyCompany: Record "Shpfy Company")
+    var
+        Customer: Record Customer;
+        CountryRegion: Record "Country/Region";
+        CompanyLocation: Record "Shpfy Company Location";
+        ShopifyTaxArea: Record "Shpfy Tax Area";
+        ICounty: Interface "Shpfy ICounty";
+    begin
+        if not Customer.GetBySystemId(ShopifyCompany."Customer SystemId") then
+            exit;
+
+        if not CompanyLocation.Get(ShopifyCompany."Location Id") then
+            Error(NoLocationErr, ShopifyCompany.Id);
+
+        Customer.Validate(Name, ShopifyCompany.Name);
+        Customer.Validate(Address, CompanyLocation.Address);
+        Customer.Validate("Address 2", CompanyLocation."Address 2");
+
+        CountryRegion.SetRange("ISO Code", CompanyLocation."Country/Region Code");
+        if CountryRegion.FindFirst() then
+            Customer.Validate("Country/Region Code", CountryRegion.Code)
+        else
+            Customer."Country/Region Code" := CompanyLocation."Country/Region Code";
+
+        Customer.Validate(City, CompanyLocation.City);
+        Customer.Validate("Post Code", CompanyLocation.Zip);
+        Customer.Validate(County, CompanyLocation."Province Code");
+
+        ICounty := Shop."County Source";
+        Customer.Validate(County, ICounty.County(CompanyLocation));
+
+        if CompanyLocation."Phone No." <> '' then
+            Customer.Validate("Phone No.", CompanyLocation."Phone No.");
+
+        if ShopifyTaxArea.Get(CompanyLocation."Country/Region Code", CompanyLocation."Province Name") then begin
+            if (ShopifyTaxArea."Tax Area Code" <> '') then begin
+                Customer.Validate("Tax Area Code", ShopifyTaxArea."Tax Area Code");
+                Customer.Validate("Tax Liable", ShopifyTaxArea."Tax Liable");
+            end;
+            if (ShopifyTaxArea."VAT Bus. Posting Group" <> '') then
+                Customer.Validate("VAT Bus. Posting Group", ShopifyTaxArea."VAT Bus. Posting Group");
+        end;
+
+        if CompanyLocation."Shpfy Payment Terms Id" <> 0 then
+            Customer.Validate("Payment Terms Code", GetPaymentTermsCodeFromShopifyPaymentTermsId(CompanyLocation."Shpfy Payment Terms Id"));
+
+        Customer.Modify();
+    end;
+
     /// <summary> 
     /// Set Shop.
     /// </summary>
@@ -147,5 +188,15 @@ codeunit 30124 "Shpfy Update Customer"
     internal procedure SetShop(ShopifyShop: Record "Shpfy Shop")
     begin
         Shop := ShopifyShop;
+    end;
+
+    internal procedure GetPaymentTermsCodeFromShopifyPaymentTermsId(ShpfyPaymentTermsId: BigInteger): Code[10]
+    var
+        ShpfyPaymentTerms: Record "Shpfy Payment Terms";
+    begin
+        ShpfyPaymentTerms.SetRange("Shop Code", Shop.Code);
+        ShpfyPaymentTerms.SetRange(Id, ShpfyPaymentTermsId);
+        if ShpfyPaymentTerms.FindFirst() then
+            exit(ShpfyPaymentTerms."Payment Terms Code");
     end;
 }

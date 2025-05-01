@@ -1,4 +1,4 @@
-﻿// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License. See License.txt in the project root for license information.
 // ------------------------------------------------------------------------------------------------
@@ -19,7 +19,6 @@ codeunit 18604 "Gate Entry Subscribers"
 {
     var
         InventorySetup: Record "Inventory Setup";
-        NoSeriesMgt: Codeunit NoSeriesManagement;
 
     [EventSubscriber(ObjectType::Codeunit, Codeunit::"Purch.-Post", 'OnAfterPurchRcptHeaderInsert', '', false, false)]
     local procedure AttachGateEntryOnReceiptInsert(
@@ -77,6 +76,8 @@ codeunit 18604 "Gate Entry Subscribers"
 
     [EventSubscriber(ObjectType::Table, Database::"Gate Entry Header", 'OnAfterInsertEvent', '', false, false)]
     local procedure UpdateNoSeriesOnAfterInsertEvent(var Rec: Record "Gate Entry Header")
+    var
+        NoSeries: Codeunit "No. Series";
     begin
         Rec."Document Date" := WorkDate();
         Rec."Document Time" := Time;
@@ -89,12 +90,15 @@ codeunit 18604 "Gate Entry Subscribers"
             Rec."Entry Type"::Inward:
                 if Rec."No." = '' then begin
                     InventorySetup.TestField("Inward Gate Entry Nos.");
-                    NoSeriesMgt.InitSeries(InventorySetup."Inward Gate Entry Nos.", Rec."No. Series", Rec."Posting Date", Rec."No.", Rec."No. Series");
+                        if not NoSeries.AreRelated(InventorySetup."Inward Gate Entry Nos.", Rec."No. Series") then
+                            Rec."No. Series" := InventorySetup."Inward Gate Entry Nos.";
+                        Rec."No." := NoSeries.GetNextNo(Rec."No. Series", Rec."Posting Date");
                 end;
             Rec."Entry Type"::Outward:
                 if Rec."No." = '' then begin
                     InventorySetup.TestField("Outward Gate Entry Nos.");
-                    NoSeriesMgt.InitSeries(InventorySetup."Outward Gate Entry Nos.", Rec."No. Series", Rec."Posting Date", Rec."No.", Rec."No. Series");
+                        Rec."No. Series" := InventorySetup."Outward Gate Entry Nos.";
+                        Rec."No." := NoSeries.GetNextNo(Rec."No. Series", Rec."Posting Date");
                 end;
         end;
     end;

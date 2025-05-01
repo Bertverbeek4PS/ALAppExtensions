@@ -1,16 +1,10 @@
 namespace Microsoft.Integration.Shopify;
 
 using System.Integration;
-#if not CLEAN23
-using System.Environment.Configuration;
-#endif
 
 codeunit 30270 "Shpfy Bulk Operation Mgt."
 {
     var
-#if not CLEAN23
-        BulkOperationFeatureIdTok: Label 'ShopifyBulkAPI';
-#endif
         InvalidUserErr: Label 'You must sign in with a Business Central licensed user to enable the feature.';
         CategoryTok: Label 'Shopify Integration', Locked = true;
         BulkOperationsDontMatchLbl: Label 'Searched bulk operation (%1, %2, %3) does not match with current one (%4)', Comment = '%1 = Bulk Operation Id, %2 = Shop Code, %3 = Type, %4 = Bulk Operation Id', Locked = true;
@@ -32,7 +26,7 @@ codeunit 30270 "Shpfy Bulk Operation Mgt."
         WebhooksMgt.EnableBulkOperationWebhook(Shop);
     end;
 
-    internal procedure SendBulkMutation(var Shop: Record "Shpfy Shop"; BulkOperationType: Enum "Shpfy Bulk Operation Type"; Jsonl: Text): Boolean
+    internal procedure SendBulkMutation(var Shop: Record "Shpfy Shop"; BulkOperationType: Enum "Shpfy Bulk Operation Type"; Jsonl: Text; RequestData: JsonArray): Boolean
     var
         BulkOperation: Record "Shpfy Bulk Operation";
         BulkOperationAPI: Codeunit "Shpfy Bulk Operation API";
@@ -56,7 +50,7 @@ codeunit 30270 "Shpfy Bulk Operation Mgt."
         BulkOperationId := BulkOperationAPI.CreateBulkOperationMutation(IBulkOperation.GetGraphQL(), Jsonl);
         if BulkOperationId = 0 then
             exit(false);
-        CreateBulkOperation(Shop, BulkOperationId, Type, IBulkOperation.GetName());
+        CreateBulkOperation(Shop, BulkOperationId, Type, IBulkOperation.GetName(), RequestData, BulkOperationType);
         if GuiAllowed then
             Message(BulkOperationCreatedLbl);
         exit(true);
@@ -71,24 +65,31 @@ codeunit 30270 "Shpfy Bulk Operation Mgt."
         BulkOperationId: BigInteger;
         BulkOperationStatus: Enum "Shpfy Bulk Operation Status";
         ErrorCode: Text;
+        Url: Text;
+        PartialDataUrl: Text;
         CompletedAt: DateTime;
         BulkOperationType: Option mutation,query;
     begin
         BulkOperationId := CommunicationMgt.GetIdOfGId(JsonHelper.GetValueAsText(JNotification, 'admin_graphql_api_id'));
-        BulkOperationStatus := BulkOperationAPI.ConvertToBulkOperationStatus(JsonHelper.GetValueAsText(JNotification, 'status'));
-        ErrorCode := JsonHelper.GetValueAsText(JNotification, 'error_code');
-        CompletedAt := JsonHelper.GetValueAsDateTime(JNotification, 'completed_at');
         Evaluate(BulkOperationType, JsonHelper.GetValueAsText(JNotification, 'type'));
 
         if BulkOperation.Get(BulkOperationId, Shop.Code, BulkOperationType) then begin
+            BulkOperationAPI.SetShop(Shop);
+            BulkOperationAPI.GetBulkRequest(BulkOperationId, BulkOperationStatus, ErrorCode, CompletedAt, Url, PartialDataUrl);
             BulkOperation.Status := BulkOperationStatus;
-            BulkOperation."Error Code" := CopyStr(ErrorCode, 1, MaxStrLen(BulkOperation."Error Code"));
-            BulkOperation."Completed At" := CompletedAt;
-            BulkOperation.Modify();
+            if ErrorCode <> '' then
+                BulkOperation."Error Code" := CopyStr(ErrorCode, 1, MaxStrLen(BulkOperation."Error Code"));
+            if CompletedAt <> 0DT then
+                BulkOperation."Completed At" := CompletedAt;
+            if Url <> '' then
+                BulkOperation.Url := CopyStr(Url, 1, MaxStrLen(BulkOperation.Url));
+            if PartialDataUrl <> '' then
+                BulkOperation."Partial Data Url" := CopyStr(PartialDataUrl, 1, MaxStrLen(BulkOperation."Partial Data Url"));
+            BulkOperation.Modify(true);
         end;
     end;
 
-    local procedure CreateBulkOperation(Shop: Record "Shpfy Shop"; BulkOperationId: BigInteger; Type: Option; Name: Text[250])
+    local procedure CreateBulkOperation(Shop: Record "Shpfy Shop"; BulkOperationId: BigInteger; Type: Option; Name: Text[250]; RequestData: JsonArray; BulkOperationType: Enum "Shpfy Bulk Operation Type")
     var
         BulkOperation: Record "Shpfy Bulk Operation";
     begin
@@ -97,7 +98,9 @@ codeunit 30270 "Shpfy Bulk Operation Mgt."
         BulkOperation.Type := Type;
         BulkOperation.Name := Name;
         BulkOperation.Status := BulkOperation.Status::Created;
+        BulkOperation."Bulk Operation Type" := BulkOperationType;
         BulkOperation.Insert();
+        BulkOperation.SetRequestData(RequestData);
     end;
 
     internal procedure UpdateBulkOperationStatus(Shop: Record "Shpfy Shop"; SearchBulkOperationId: BigInteger; Type: Option; var BulkOperationStatus: Enum "Shpfy Bulk Operation Status")
@@ -107,27 +110,37 @@ codeunit 30270 "Shpfy Bulk Operation Mgt."
         BulkOperationId: BigInteger;
         ErrorCode: Text;
         CompletedAt: DateTime;
+        Url: Text;
+        PartialDataUrl: Text;
     begin
         BulkOperationAPI.SetShop(Shop);
-        BulkOperationAPI.GetCurrentBulkRequest(BulkOperationId, BulkOperationStatus, ErrorCode, CompletedAt);
+        BulkOperationAPI.GetCurrentBulkRequest(BulkOperationId, BulkOperationStatus, ErrorCode, CompletedAt, Url, PartialDataUrl);
         if BulkOperation.Get(BulkOperationId, Shop.Code, Type) then begin
             BulkOperation.Status := BulkOperationStatus;
             if ErrorCode <> '' then
                 BulkOperation."Error Code" := CopyStr(ErrorCode, 1, MaxStrLen(BulkOperation."Error Code"));
             if CompletedAt <> 0DT then
                 BulkOperation."Completed At" := CompletedAt;
-            BulkOperation.Modify();
+            if Url <> '' then
+                BulkOperation.Url := CopyStr(Url, 1, MaxStrLen(BulkOperation.Url));
+            if PartialDataUrl <> '' then
+                BulkOperation."Partial Data Url" := CopyStr(PartialDataUrl, 1, MaxStrLen(BulkOperation."Partial Data Url"));
+            BulkOperation.Modify(true);
 
             if BulkOperationId <> SearchBulkOperationId then begin
                 Session.LogMessage('0000KZC', StrSubstNo(BulkOperationsDontMatchLbl, SearchBulkOperationId, Shop.Code, Type, BulkOperationId), Verbosity::Warning, DataClassification::SystemMetadata, TelemetryScope::ExtensionPublisher, 'Category', CategoryTok);
-                BulkOperationAPI.GetBulkRequest(SearchBulkOperationId, BulkOperationStatus, ErrorCode, CompletedAt);
+                BulkOperationAPI.GetBulkRequest(SearchBulkOperationId, BulkOperationStatus, ErrorCode, CompletedAt, Url, PartialDataUrl);
                 BulkOperation.Get(SearchBulkOperationId, Shop.Code, Type);
                 BulkOperation.Status := BulkOperationStatus;
                 if ErrorCode <> '' then
                     BulkOperation."Error Code" := CopyStr(ErrorCode, 1, MaxStrLen(BulkOperation."Error Code"));
                 if CompletedAt <> 0DT then
                     BulkOperation."Completed At" := CompletedAt;
-                BulkOperation.Modify();
+                if Url <> '' then
+                    BulkOperation.Url := CopyStr(Url, 1, MaxStrLen(BulkOperation.Url));
+                if PartialDataUrl <> '' then
+                    BulkOperation."Partial Data Url" := CopyStr(PartialDataUrl, 1, MaxStrLen(BulkOperation."Partial Data Url"));
+                BulkOperation.Modify(true);
             end;
         end;
     end;
@@ -144,66 +157,21 @@ codeunit 30270 "Shpfy Bulk Operation Mgt."
                 BulkOperation.DeleteAll(false);
     end;
 
-    internal procedure GetBulkOperationResult(Shop: Record "Shpfy Shop"; BulkOperationId: BigInteger)
+    internal procedure GetBulkOperationResult(Shop: Record "Shpfy Shop"; BulkOperation: Record "Shpfy Bulk Operation"): Text
     var
         BulkOperationAPI: Codeunit "Shpfy Bulk Operation API";
-        Url: Text;
-        PartialDataUrl: Text;
     begin
         BulkOperationAPI.SetShop(Shop);
-        BulkOperationAPI.GetBulkOperationResult(BulkOperationId, Url, PartialDataUrl);
-        if PartialDataUrl <> '' then begin
-            Message(BulkOperationAPI.GetData(PartialDataUrl));
-            exit;
-        end;
-        if Url <> '' then begin
-            Message(BulkOperationAPI.GetData(Url));
-            exit;
-        end;
+        if BulkOperation.Url <> '' then
+            exit(BulkOperationAPI.GetData(BulkOperation.Url));
+        if BulkOperation."Partial Data Url" <> '' then
+            exit(BulkOperationAPI.GetData(BulkOperation."Partial Data Url"));
     end;
 
     internal procedure GetBulkOperationThreshold(): Integer
     begin
-        exit(10);
+        exit(100);
     end;
-
-#if not CLEAN23
-    [Obsolete('Feature ShopifyBulkAPI will be enabled by default in version 26.0.', '23.0')]
-    procedure IsBulkOperationFeatureEnabled() FeatureEnabled: Boolean;
-    var
-        FeatureManagementFacade: Codeunit "Feature Management Facade";
-    begin
-        FeatureEnabled := FeatureManagementFacade.IsEnabled(BulkOperationFeatureIdTok);
-        OnIsBulkOperationFeatureEnabled(FeatureEnabled);
-    end;
-
-    [Obsolete('Feature ShopifyBulkAPI will be enabled by default in version 26.0.', '23.0')]
-    procedure GetBulkOperationFeatureKey(): Text[50]
-    begin
-        exit(BulkOperationFeatureIdTok);
-    end;
-
-    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Feature Management Facade", 'OnAfterFeatureEnableConfirmed', '', false, false)]
-    local procedure HandleOnAfterFeatureEnableConfirmed(var FeatureKey: Record "Feature Key")
-    var
-        Shop: Record "Shpfy Shop";
-    begin
-        if FeatureKey.ID = BulkOperationFeatureIdTok then begin
-            Shop.SetRange(Enabled, true);
-            if Shop.FindSet() then
-                repeat
-                    EnableBulkOperations(Shop);
-                until Shop.Next() = 0;
-        end;
-    end;
-
-    [Obsolete('Feature ShopifyBulkAPI will be enabled by default in version 26.0.', '23.0')]
-    [InternalEvent(false, false)]
-    local procedure OnIsBulkOperationFeatureEnabled(var FeatureEnabled: Boolean)
-    begin
-    end;
-#endif
-
 
     [InternalEvent(false, false)]
     local procedure OnInvalidUser(var IsHandled: Boolean)

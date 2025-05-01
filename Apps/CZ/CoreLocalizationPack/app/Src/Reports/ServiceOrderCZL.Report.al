@@ -146,7 +146,7 @@ report 31194 "Service Order CZL"
             column(OrderDate_ServiceHeaderCaption; FieldCaption("Order Date"))
             {
             }
-            column(OrderDate_ServiceHeader; "Order Date")
+            column(OrderDate_ServiceHeader; Format("Order Date"))
             {
             }
             column(YourReference_ServiceHeaderCaption; FieldCaption("Your Reference"))
@@ -295,7 +295,7 @@ report 31194 "Service Order CZL"
                     column(ResponseDate_ServiceItemLineCaption; FieldCaption("Response Date"))
                     {
                     }
-                    column(ResponseDate_ServiceItemLine; "Response Date")
+                    column(ResponseDate_ServiceItemLine; Format("Response Date"))
                     {
                     }
                     column(ResponseTime_ServiceItemLineCaption; FieldCaption("Response Time"))
@@ -503,21 +503,11 @@ report 31194 "Service Order CZL"
     }
 
     var
-        PaymentTerms: Record "Payment Terms";
-        PaymentMethod: Record "Payment Method";
-        ShipmentMethod: Record "Shipment Method";
         LanguageMgt: Codeunit Language;
         FormatAddress: Codeunit "Format Address";
         FormatDocument: Codeunit "Format Document";
         FormatDocumentMgtCZL: Codeunit "Format Document Mgt. CZL";
-        CompanyAddr: array[8] of Text[100];
-        CustAddr: array[8] of Text[100];
-        ShipToAddr: array[8] of Text[100];
-        DocFooterText: Text[1000];
-        NoOfCopies: Integer;
-        NoOfLoops: Integer;
-        Number1: Integer;
-        Number2: Integer;
+        ServiceFormatAddress: Codeunit "Service Format Address";
         DocumentLbl: Label 'Service Order';
         PageLbl: Label 'Page';
         CopyLbl: Label 'Copy';
@@ -537,6 +527,19 @@ report 31194 "Service Order CZL"
         GrossAmountLbl: Label 'Gross Amount';
         TotalLbl: Label 'Total';
 
+    protected var
+        PaymentTerms: Record "Payment Terms";
+        PaymentMethod: Record "Payment Method";
+        ShipmentMethod: Record "Shipment Method";
+        CompanyAddr: array[8] of Text[100];
+        CustAddr: array[8] of Text[100];
+        ShipToAddr: array[8] of Text[100];
+        DocFooterText: Text[1000];
+        NoOfCopies: Integer;
+        NoOfLoops: Integer;
+        Number1: Integer;
+        Number2: Integer;
+
     procedure InitializeRequest(NoOfCopiesFrom: Integer)
     begin
         NoOfCopies := NoOfCopiesFrom;
@@ -552,8 +555,8 @@ report 31194 "Service Order CZL"
 
     local procedure FormatAddressFields(ServiceHeader: Record "Service Header")
     begin
-        FormatAddress.ServiceOrderSellto(CustAddr, ServiceHeader);
-        FormatAddress.ServiceHeaderShipTo(ShipToAddr, ServiceHeader);
+        ServiceFormatAddress.ServiceOrderSellto(CustAddr, ServiceHeader);
+        ServiceFormatAddress.ServiceHeaderShipTo(ShipToAddr, ServiceHeader);
     end;
 
     local procedure IsReportInPreviewMode(): Boolean

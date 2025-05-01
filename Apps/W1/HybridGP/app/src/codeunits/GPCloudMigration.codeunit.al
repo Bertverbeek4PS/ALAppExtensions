@@ -221,6 +221,17 @@ codeunit 4025 "GP Cloud Migration"
             CreateDataMigrationStatusRecords(Database::"Item", ItemsToMigrateCount, Database::"GP Item", Codeunit::"GP Item Migrator");
     end;
 
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Hybrid Cloud Management", 'OnIsCloudMigrationCompleted', '', false, false)]
+    local procedure HandleIsCloudMigrationCompleted(SourceProduct: Text; var CloudMigrationCompleted: Boolean)
+    var
+        HybridGPWizard: Codeunit "Hybrid GP Wizard";
+    begin
+        if SourceProduct <> HybridGPWizard.ProductId() then
+            exit;
+
+        CloudMigrationCompleted := true;
+    end;
+
     [EventSubscriber(ObjectType::Codeunit, Codeunit::"Hybrid Cloud Management", 'OnInsertDefaultTableMappings', '', false, false)]
     local procedure OnInsertDefaultTableMappings(DeleteExisting: Boolean; ProductID: Text[250])
     var
@@ -245,6 +256,7 @@ codeunit 4025 "GP Cloud Migration"
 
         UpdateOrInsertRecord(Database::"GP IV00101", 'IV00101');
         UpdateOrInsertRecord(Database::"GP IV00102", 'IV00102');
+        UpdateOrInsertRecord(Database::"GP IV00104", 'IV00104');
         UpdateOrInsertRecord(Database::"GP IV00105", 'IV00105');
         UpdateOrInsertRecord(Database::"GP IV00200", 'IV00200');
         UpdateOrInsertRecord(Database::"GP IV00300", 'IV00300');

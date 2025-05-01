@@ -51,6 +51,11 @@ page 30156 "Shpfy Companies"
                     ApplicationArea = All;
                     ToolTip = 'Specifies the company''s name.';
                 }
+                field("External Id"; Rec."External Id")
+                {
+                    ApplicationArea = All;
+                    ToolTip = 'Specifies the external ID of the company.';
+                }
                 field(Note; Rec.GetNote())
                 {
                     Caption = 'Note';
@@ -65,6 +70,11 @@ page 30156 "Shpfy Companies"
             {
                 ApplicationArea = All;
                 SubPageLink = Id = field("Main Contact Customer Id");
+            }
+            part(Locations; "Shpfy Comp. Locations Subform")
+            {
+                ApplicationArea = All;
+                SubPageLink = "Company SystemId" = field(SystemId);
             }
         }
     }
@@ -118,6 +128,18 @@ page 30156 "Shpfy Companies"
                 RunPageLink = "Company SystemId" = field(SystemId);
                 ToolTip = 'View a list of Shopify catalogs for the company.';
             }
+            action(ShopifyLocations)
+            {
+                ApplicationArea = All;
+                Caption = 'Shopify Locations';
+                Image = Warehouse;
+                Promoted = true;
+                PromotedOnly = true;
+                PromotedCategory = Category4;
+                RunObject = Page "Shpfy Comp. Locations";
+                RunPageLink = "Company SystemId" = field(SystemId);
+                ToolTip = 'View a list of Shopify company locations.';
+            }
         }
 
         area(Processing)
@@ -170,6 +192,24 @@ page 30156 "Shpfy Companies"
                     end;
                 end;
 
+            }
+            action(Metafields)
+            {
+                ApplicationArea = All;
+                Caption = 'Metafields';
+                Image = PriceAdjustment;
+                Promoted = true;
+                PromotedCategory = Process;
+                PromotedIsBig = true;
+                PromotedOnly = true;
+                ToolTip = 'Add metafields to a company. This can be used for adding custom data fields to companies in Shopify.';
+
+                trigger OnAction()
+                var
+                    Metafields: Page "Shpfy Metafields";
+                begin
+                    Metafields.RunForResource(Database::"Shpfy Company", Rec.Id, Rec."Shop Code");
+                end;
             }
         }
     }

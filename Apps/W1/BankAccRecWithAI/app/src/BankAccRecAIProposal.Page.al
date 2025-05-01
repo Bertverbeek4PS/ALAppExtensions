@@ -11,7 +11,7 @@ page 7250 "Bank Acc. Rec. AI Proposal"
     Caption = 'Reconcile with Copilot';
     DataCaptionExpression = PageCaptionLbl;
     PageType = PromptDialog;
-    IsPreview = true;
+    IsPreview = false;
     Extensible = false;
     ApplicationArea = All;
     Editable = true;
@@ -275,6 +275,7 @@ page 7250 "Bank Acc. Rec. AI Proposal"
             end;
 
         SummaryStyleTxt := 'Ambiguous';
+        CurrPage.ProposalDetails.Page.SetProposalFieldCaption(ProposalTxt);
     end;
 
     local procedure AutoMatchWithCopilot()
@@ -308,6 +309,8 @@ page 7250 "Bank Acc. Rec. AI Proposal"
         BankAccReconciliationLine.Reset();
         BankAccReconciliationLine.FilterBankRecLinesByDate(BankAccReconciliation, false);
         GenerateCopilotMatchProposals();
+        if not Rec.Insert() then
+            Rec.Modify();
         PageCaptionLbl := StrSubstNo(ContentAreaCaptionTxt, BankAccNo, StatementNo, StatementDate);
     end;
 
@@ -514,13 +517,7 @@ page 7250 "Bank Acc. Rec. AI Proposal"
         BankAccReconciliationLine.Copy(InputBankAccReconciliationLine);
     end;
 
-#if not CLEAN21
-#pragma warning disable AL0432
-#endif
     internal procedure SetTempBankAccLedgerEntryMatchingBuffer(var InputTempBankAccLedgerEntryMatchingBuffer: Record "Ledger Entry Matching Buffer" temporary);
-#if not CLEAN21
-#pragma warning restore AL0432
-#endif
     begin
         if not InputTempBankAccLedgerEntryMatchingBuffer.IsEmpty() then
             TempBankAccLedgerEntryMatchingBuffer.Copy(InputTempBankAccLedgerEntryMatchingBuffer, true);
@@ -588,14 +585,8 @@ page 7250 "Bank Acc. Rec. AI Proposal"
 
     var
         BankAccReconciliationLine: Record "Bank Acc. Reconciliation Line";
-#if not CLEAN21
-#pragma warning disable AL0432
-#endif
         TempBankAccLedgerEntryMatchingBuffer: Record "Ledger Entry Matching Buffer" temporary;
         TempBankStatementMatchingBuffer: Record "Bank Statement Matching Buffer" temporary;
-#if not CLEAN21
-#pragma warning restore AL0432
-#endif
         AutoMatchedLinesTxt: Text;
         LinesMatchedByCopilotTxt: Text;
         AutoMatchedLinesLbl: label '%1 of %2 lines (%3%)', Comment = '%1 - an integer; %2 - an integer; %3 a decimal between 0 and 100';
@@ -626,6 +617,7 @@ page 7250 "Bank Acc. Rec. AI Proposal"
         AllLinesMatchedTxt: label 'All lines (100%) are matched. Review match proposals.';
         SubsetOfLinesMatchedTxt: label '%1% of lines are matched. Review match proposals.', Comment = '%1 - a decimal between 0 and 100';
         InputWithReservedWordsRemovedTxt: label 'Statement line descriptions or ledger entry descriptions with reserved AI chat completion prompt words were detected. For security reasons, they were excluded from the auto-matching process. You must match these statement lines or ledger entries manually.';
+        ProposalTxt: label 'Match Entry';
         StatementDate: Date;
         BalanceLastStatement: Decimal;
         StatementEndingBalance: Decimal;

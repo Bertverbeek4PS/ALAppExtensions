@@ -1,4 +1,4 @@
-﻿// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License. See License.txt in the project root for license information.
 // ------------------------------------------------------------------------------------------------
@@ -125,21 +125,28 @@ table 18468 "Delivery Challan Header"
     }
 
     trigger OnInsert()
+    var
+        NoSeries: Codeunit "No. Series";
     begin
-        InitRecord();
         PurchSetup.Get();
+        InitRecord();
         if "No." = '' then begin
             PurchSetup.TestField("Posted Delivery Challan Nos.");
-            NoSeriesMgt.InitSeries(PurchSetup."Posted Delivery Challan Nos.", xRec."No. Series", TODAY, "No.", "No. Series");
+                "No. Series" := PurchSetup."Posted Delivery Challan Nos.";
+                if NoSeries.AreRelated("No. Series", xRec."No. Series") then
+                    "No. Series" := xRec."No. Series";
+                "No." := NoSeries.GetNextNo("No. Series", Today());
         end;
     end;
 
     procedure InitRecord()
+    var
+        NoSeries: Codeunit "No. Series";
     begin
-        NoSeriesMgt.SetDefaultSeries("No. Series", PurchSetup."Posted Delivery Challan Nos.");
+        if NoSeries.IsAutomatic(PurchSetup."Posted Delivery Challan Nos.") then
+            "No. Series" := PurchSetup."Posted Delivery Challan Nos.";
     end;
 
     var
         PurchSetup: Record "Purchases & Payables Setup";
-        NoSeriesMgt: Codeunit "NoSeriesManagement";
 }

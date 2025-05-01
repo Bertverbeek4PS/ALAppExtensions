@@ -7,6 +7,8 @@ namespace Microsoft.Service.History;
 using Microsoft.Bank.BankAccount;
 using Microsoft.Bank.Setup;
 using Microsoft.Finance.Currency;
+using Microsoft.Finance.GeneralLedger.Setup;
+using Microsoft.Foundation.Company;
 
 tableextension 11735 "Service Invoice Header CZL" extends "Service Invoice Header"
 {
@@ -15,6 +17,7 @@ tableextension 11735 "Service Invoice Header CZL" extends "Service Invoice Heade
         field(11717; "Specific Symbol CZL"; Code[10])
         {
             Caption = 'Specific Symbol';
+            OptimizeForTextSearch = true;
             CharAllowed = '09';
             Editable = false;
             DataClassification = CustomerContent;
@@ -22,6 +25,7 @@ tableextension 11735 "Service Invoice Header CZL" extends "Service Invoice Heade
         field(11718; "Variable Symbol CZL"; Code[10])
         {
             Caption = 'Variable Symbol';
+            OptimizeForTextSearch = true;
             CharAllowed = '09';
             Editable = false;
             DataClassification = CustomerContent;
@@ -29,6 +33,7 @@ tableextension 11735 "Service Invoice Header CZL" extends "Service Invoice Heade
         field(11719; "Constant Symbol CZL"; Code[10])
         {
             Caption = 'Constant Symbol';
+            OptimizeForTextSearch = true;
             CharAllowed = '09';
             TableRelation = "Constant Symbol CZL";
             Editable = false;
@@ -112,19 +117,16 @@ tableextension 11735 "Service Invoice Header CZL" extends "Service Invoice Heade
             TableRelation = Currency;
             Editable = false;
         }
+#if not CLEANSCHEMA25
         field(11780; "VAT Date CZL"; Date)
         {
             Caption = 'VAT Date';
             DataClassification = CustomerContent;
-#if not CLEAN22
-            ObsoleteState = Pending;
-            ObsoleteTag = '22.0';
-#else
             ObsoleteState = Removed;
             ObsoleteTag = '25.0';
-#endif
             ObsoleteReason = 'Replaced by VAT Reporting Date.';
         }
+#endif
         field(11781; "Registration No. CZL"; Text[20])
         {
             Caption = 'Registration No.';
@@ -135,32 +137,24 @@ tableextension 11735 "Service Invoice Header CZL" extends "Service Invoice Heade
             Caption = 'Tax Registration No.';
             DataClassification = CustomerContent;
         }
+#if not CLEANSCHEMA25
         field(31068; "Physical Transfer CZL"; Boolean)
         {
             Caption = 'Physical Transfer';
             DataClassification = CustomerContent;
-#if not CLEAN22
-            ObsoleteState = Pending;
-            ObsoleteTag = '22.0';
-#else
             ObsoleteState = Removed;
             ObsoleteTag = '25.0';
-#endif
             ObsoleteReason = 'Intrastat related functionalities are moved to Intrastat extensions.';
         }
         field(31069; "Intrastat Exclude CZL"; Boolean)
         {
             Caption = 'Intrastat Exclude';
             DataClassification = CustomerContent;
-#if not CLEAN22
-            ObsoleteState = Pending;
-            ObsoleteTag = '22.0';
-#else
             ObsoleteState = Removed;
             ObsoleteTag = '25.0';
-#endif
             ObsoleteReason = 'Intrastat related functionalities are moved to Intrastat extensions. This field is not used any more.';
         }
+#endif
         field(31072; "EU 3-Party Intermed. Role CZL"; Boolean)
         {
             Caption = 'EU 3-Party Intermediate Role';
@@ -180,8 +174,75 @@ tableextension 11735 "Service Invoice Header CZL" extends "Service Invoice Heade
         OnAfterUpdateBankInfoCZL(Rec);
     end;
 
+    procedure CreateServiceInvoicePaymentQRCodeStringCZL(): Text
+    var
+        GeneralLedgerSetup: Record "General Ledger Setup";
+        CompanyInformation: Record "Company Information";
+        IBAN: Code[50];
+        SWIFT: Code[20];
+        QRCode: Text;
+        InvoiceTxt: Label 'Invoice';
+    begin
+        if "Bank Account Code CZL" <> '' then begin
+            IBAN := "IBAN CZL";
+            SWIFT := "SWIFT Code CZL";
+        end else begin
+            CompanyInformation.Get();
+            IBAN := CompanyInformation.IBAN;
+            SWIFT := CompanyInformation."SWIFT Code";
+            if "IBAN CZL" <> '' then
+                IBAN := "IBAN CZL";
+            if "SWIFT Code CZL" <> '' then
+                SWIFT := "SWIFT Code CZL";
+        end;
+        if IBAN <> '' then
+            IBAN := DelChr(IBAN, '=', ' ');
+
+        CalcFields("Amount Including VAT");
+
+        QRCode := 'SPD*1.0*';
+
+        // ACC
+        if SWIFT <> '' then
+            QRCode := QRCode + 'ACC:' + IBAN + '+' + SWIFT + '*'
+        else
+            QRCode := QRCode + 'ACC:' + IBAN + '*';
+
+        // AM
+        QRCode := QRCode + 'AM:' + format("Amount Including VAT", 0, '<Precision,2:2><Standard Format,2>') + '*';
+
+        // CC
+        if "Currency Code" = '' then begin
+            GeneralLedgerSetup.Get();
+            QRCode := QRCode + 'CC:' + UpperCase(GeneralLedgerSetup."LCY Code") + '*';
+        end else
+            QRCode := QRCode + 'CC:' + UpperCase("Currency Code") + '*';
+
+        // DT
+        QRCode := QRCode + 'DT:' + format("Due Date", 0, '<Year4><Month,2><Day,2>') + '*';
+
+        // MSG
+        QRCode := QRCode + 'MSG:' + InvoiceTxt + ' ' + "No." + '*';
+
+        // XVS
+        QRCode := QRCode + 'X-VS:' + "Variable Symbol CZL" + '*';
+
+        // X-KS
+        QRCode := QRCode + 'X-KS:' + "Constant Symbol CZL" + '*';
+
+        if IBAN = '' then
+            QRCode := '';
+        OnBeforeExitServiceInvoicePaymentQRCodeStringCZL(Rec, QRCode);
+        exit(QRCode);
+    end;
+
     [IntegrationEvent(false, false)]
     local procedure OnAfterUpdateBankInfoCZL(var ServiceInvoiceHeader: Record "Service Invoice Header")
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnBeforeExitServiceInvoicePaymentQRCodeStringCZL(ServiceInvoiceHeader: Record "Service Invoice Header"; var QRCode: Text)
     begin
     end;
 }

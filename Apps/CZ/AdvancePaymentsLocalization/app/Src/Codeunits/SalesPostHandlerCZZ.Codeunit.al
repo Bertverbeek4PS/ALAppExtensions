@@ -5,6 +5,7 @@
 namespace Microsoft.Finance.AdvancePayments;
 
 using Microsoft.Finance.CashDesk;
+using Microsoft.Finance.GeneralLedger.Journal;
 using Microsoft.Finance.GeneralLedger.Posting;
 using Microsoft.Sales.Document;
 using Microsoft.Sales.History;
@@ -18,13 +19,10 @@ codeunit 31008 "Sales-Post Handler CZZ"
     var
         SalesAdvLetterManagement: Codeunit "SalesAdvLetterManagement CZZ";
     begin
-        if (not SalesHeader.Invoice) or (not (SalesHeader."Document Type" in [SalesHeader."Document Type"::Order, SalesHeader."Document Type"::Invoice])) then
+        if (not SalesHeader.Invoice) or (not SalesHeader.IsAdvanceLetterDocTypeCZZ()) then
             exit;
 
-        if SalesHeader."Document Type" = SalesHeader."Document Type"::Order then
-            SalesAdvLetterManagement.CheckAdvancePayment("Adv. Letter Usage Doc.Type CZZ"::"Sales Order", SalesHeader)
-        else
-            SalesAdvLetterManagement.CheckAdvancePayment("Adv. Letter Usage Doc.Type CZZ"::"Sales Invoice", SalesHeader);
+        SalesAdvLetterManagement.CheckAdvancePayment(SalesHeader.GetAdvLetterUsageDocTypeCZZ(), SalesHeader)
     end;
 
     [EventSubscriber(ObjectType::Codeunit, Codeunit::"Sales Handler CZP", 'OnBeforeCreateCashDocument', '', false, false)]
@@ -42,13 +40,14 @@ codeunit 31008 "Sales-Post Handler CZZ"
         SalesAdvLetterManagement: Codeunit "SalesAdvLetterManagement CZZ";
         AdvLetterUsageDocTypeCZZ: Enum "Adv. Letter Usage Doc.Type CZZ";
     begin
-        if (not SalesHeader.Invoice) or (not (SalesHeader."Document Type" in [SalesHeader."Document Type"::Order, SalesHeader."Document Type"::Invoice])) then
+        if (not SalesHeader.Invoice) or (not SalesHeader.IsAdvanceLetterDocTypeCZZ()) then
             exit;
 
-        if SalesHeader."Document Type" = SalesHeader."Document Type"::Order then
-            AdvLetterUsageDocTypeCZZ := AdvLetterUsageDocTypeCZZ::"Sales Order"
-        else
-            AdvLetterUsageDocTypeCZZ := AdvLetterUsageDocTypeCZZ::"Sales Invoice";
+        SalesInvoiceHeader.CalcFields("Remaining Amount");
+        if SalesInvoiceHeader."Remaining Amount" = 0 then
+            exit;
+
+        AdvLetterUsageDocTypeCZZ := SalesHeader.GetAdvLetterUsageDocTypeCZZ();
 
         CustLedgerEntry.Get(SalesInvoiceHeader."Cust. Ledger Entry No.");
         BindSubscription(GetLastGLEntryNoCZZ);
@@ -80,5 +79,14 @@ codeunit 31008 "Sales-Post Handler CZZ"
     local procedure DisableCheckOnBeforeTestStatusRelease(var IsHandled: Boolean)
     begin
         IsHandled := true;
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Sales Post Invoice Events", 'OnPostLedgerEntryOnBeforeGenJnlPostLine', '', false, false)]
+    local procedure DisableApplicationOnPostLedgerEntryOnBeforeGenJnlPostLine(var GenJnlLine: Record "Gen. Journal Line"; var SalesHeader: Record "Sales Header")
+    begin
+        if (not SalesHeader.Invoice) or (not SalesHeader.IsAdvanceLetterDocTypeCZZ()) then
+            exit;
+        if SalesHeader.HasAdvanceLetterLinkedCZZ() then
+            GenJnlLine."Allow Application" := false;
     end;
 }

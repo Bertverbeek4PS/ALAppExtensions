@@ -18,15 +18,37 @@ codeunit 31395 "Dimension Auto.Update Mgt. CZA"
     var
         TempChangeLogSetupTable: Record "Change Log Setup (Table)" temporary;
         TempDefaultDimension: Record "Default Dimension" temporary;
+        TempAutoCreateDimAllObjWithCaption: Record AllObjWithCaption temporary;
         DimChangeSetupRead: Boolean;
         RunEmployeeOnAfterInsertEvent: Boolean;
         RunCustomerOnAfterInsertEvent: Boolean;
         RunVendorOnAfterInsertEvent: Boolean;
         RunItemOnAfterInsertEvent: Boolean;
+        RunGLAccountOnAfterInsertEvent: Boolean;
+        RunResourceOnAfterInsertEvent: Boolean;
+        RunResourceGroupOnAfterInsertEvent: Boolean;
+        RunJobOnAfterInsertEvent: Boolean;
+        RunBankAccountOnAfterInsertEvent: Boolean;
+        RunFixedAssetOnAfterInsertEvent: Boolean;
+        RunInsuranceOnAfterInsertEvent: Boolean;
+        RunResponsibilityCenterOnAfterInsertEvent: Boolean;
+        RunSalespersonPurchaserOnAfterInsertEvent: Boolean;
+        RunCampaignOnAfterInsertEvent: Boolean;
+        RunCashFlowManualExpenseOnAfterInsertEvent: Boolean;
+        RunCashFlowManualRevenueOnAfterInsertEvent: Boolean;
+        RunVendorTemplOnAfterInsertEvent: Boolean;
+        RunCustomerTemplOnAfterInsertEvent: Boolean;
+        RunItemTemplOnAfterInsertEvent: Boolean;
+        RunEmployeeTemplOnAfterInsertEvent: Boolean;
+        RunWorkCenterOnAfterInsertEvent: Boolean;
+        RunItemChargeOnAfterInsertEvent: Boolean;
 
     [EventSubscriber(ObjectType::Codeunit, Codeunit::"GlobalTriggerManagement", 'OnAfterGetDatabaseTableTriggerSetup', '', false, false)]
     local procedure GetDatabaseTableTriggerSetup(TableId: Integer; var OnDatabaseInsert: Boolean; var OnDatabaseModify: Boolean; var OnDatabaseDelete: Boolean; var OnDatabaseRename: Boolean)
     begin
+        if GetExecutionContext() <> ExecutionContext::Normal then
+            exit;
+
         if CompanyName = '' then
             exit;
 
@@ -36,17 +58,34 @@ codeunit 31395 "Dimension Auto.Update Mgt. CZA"
             OnDatabaseInsert := true;
             OnDatabaseModify := true;
         end;
+
+        if TempAutoCreateDimAllObjWithCaption.Get(TempAutoCreateDimAllObjWithCaption."Object Type"::Table, TableId) then
+            OnDatabaseInsert := true;
     end;
 
     [EventSubscriber(ObjectType::Codeunit, Codeunit::"GlobalTriggerManagement", 'OnAfterOnDatabaseInsert', '', false, false)]
     local procedure DimensionInsert(RecRef: RecordRef)
+    var
+        DimensionAutoCreateMgtCZA: Codeunit "Dimension Auto.Create Mgt. CZA";
+        PrimaryKeyFieldRef: FieldRef;
+        PrimaryKeyRef: KeyRef;
     begin
+        if GetExecutionContext() <> ExecutionContext::Normal then
+            exit;
+
         if RecRef.IsTemporary then
             exit;
 
         if RecRef.Number = Database::"Default Dimension" then
             ClearSetup();
         CheckChangeSetupRead();
+
+        if TempAutoCreateDimAllObjWithCaption.Get(TempAutoCreateDimAllObjWithCaption."Object Type"::Table, RecRef.Number) then begin
+            PrimaryKeyRef := RecRef.KeyIndex(1);
+            PrimaryKeyFieldRef := PrimaryKeyRef.FieldIndex(1);
+            DimensionAutoCreateMgtCZA.AutoCreateDimension(RecRef.Number, format(PrimaryKeyFieldRef.Value));
+        end;
+
         if not TempChangeLogSetupTable.Get(RecRef.Number) then
             exit;
 
@@ -58,6 +97,9 @@ codeunit 31395 "Dimension Auto.Update Mgt. CZA"
     var
         xRecRef: RecordRef;
     begin
+        if GetExecutionContext() <> ExecutionContext::Normal then
+            exit;
+
         if RecRef.IsTemporary then
             exit;
 
@@ -145,7 +187,9 @@ codeunit 31395 "Dimension Auto.Update Mgt. CZA"
 
     local procedure ReadSetup()
     var
+        AllObjWithCaption: Record AllObjWithCaption;
         DefaultDimension: Record "Default Dimension";
+        DimensionManagement: Codeunit DimensionManagement;
     begin
         DefaultDimension.SetRange("Automatic Create CZA", true);
         DefaultDimension.SetRange("No.", '');
@@ -160,6 +204,14 @@ codeunit 31395 "Dimension Auto.Update Mgt. CZA"
                 TempDefaultDimension := DefaultDimension;
                 TempDefaultDimension.Insert();
             until DefaultDimension.Next() = 0;
+
+        DefaultDimension.SetRange("Dim. Description Field ID CZA");
+        DefaultDimension.SetRange("Dim. Description Update CZA");
+        if DefaultDimension.FindSet(false) then
+            repeat
+                if AllObjWithCaption.Get(AllObjWithCaption."Object Type"::Table, DefaultDimension."Table ID") then
+                    DimensionManagement.DefaultDimInsertTempObject(TempAutoCreateDimAllObjWithCaption, DefaultDimension."Table ID");
+            until DefaultDimension.Next() = 0;
     end;
 
     internal procedure ForceSetDimChangeSetupRead()
@@ -173,6 +225,8 @@ codeunit 31395 "Dimension Auto.Update Mgt. CZA"
         TempChangeLogSetupTable.DeleteAll(false);
         TempDefaultDimension.Reset();
         TempDefaultDimension.DeleteAll(false);
+        TempAutoCreateDimAllObjWithCaption.Reset();
+        TempAutoCreateDimAllObjWithCaption.DeleteAll(false);
         DimChangeSetupRead := false;
     end;
 
@@ -214,5 +268,185 @@ codeunit 31395 "Dimension Auto.Update Mgt. CZA"
     internal procedure IsRequestRunItemOnAfterInsertEventDefaultDim(): Boolean
     begin
         exit(RunItemOnAfterInsertEvent);
+    end;
+
+    internal procedure SetRequestRunGLAccountOnAfterInsertEvent(SetRunGLAccountOnAfterInsertEvent: Boolean)
+    begin
+        RunGLAccountOnAfterInsertEvent := SetRunGLAccountOnAfterInsertEvent;
+    end;
+
+    internal procedure IsRequestRunGLAccountOnAfterInsertEventDefaultDim(): Boolean
+    begin
+        exit(RunGLAccountOnAfterInsertEvent);
+    end;
+
+    internal procedure SetRequestRunResourceOnAfterInsertEvent(SetRunResourceOnAfterInsertEvent: Boolean)
+    begin
+        RunResourceOnAfterInsertEvent := SetRunResourceOnAfterInsertEvent;
+    end;
+
+    internal procedure IsRequestRunResourceOnAfterInsertEventDefaultDim(): Boolean
+    begin
+        exit(RunResourceOnAfterInsertEvent);
+    end;
+
+    internal procedure SetRequestRunResourcegroupOnAfterInsertEvent(SetRunResourceGroupOnAfterInsertEvent: Boolean)
+    begin
+        RunResourceGroupOnAfterInsertEvent := SetRunResourceGroupOnAfterInsertEvent;
+    end;
+
+    internal procedure IsRequestRunResourceGroupOnAfterInsertEventDefaultDim(): Boolean
+    begin
+        exit(RunResourceGroupOnAfterInsertEvent);
+    end;
+
+    internal procedure SetRequestRunJobOnAfterInsertEvent(SetRunJobOnAfterInsertEvent: Boolean)
+    begin
+        RunJobOnAfterInsertEvent := SetRunJobOnAfterInsertEvent;
+    end;
+
+    internal procedure IsRequestRunJobOnAfterInsertEventDefaultDim(): Boolean
+    begin
+        exit(RunJobOnAfterInsertEvent);
+    end;
+
+    internal procedure SetRequestRunBankAccountOnAfterInsertEvent(SetRunBankAccountOnAfterInsertEvent: Boolean)
+    begin
+        RunBankAccountOnAfterInsertEvent := SetRunBankAccountOnAfterInsertEvent;
+    end;
+
+    internal procedure IsRequestRunBankAccountOnAfterInsertEventDefaultDim(): Boolean
+    begin
+        exit(RunBankAccountOnAfterInsertEvent);
+    end;
+
+    internal procedure SetRequestRunFixedAssetOnAfterInsertEvent(SetRunFixedAssetOnAfterInsertEvent: Boolean)
+    begin
+        RunFixedAssetOnAfterInsertEvent := SetRunFixedAssetOnAfterInsertEvent;
+    end;
+
+    internal procedure IsRequestRunFixedAssetOnAfterInsertEventDefaultDim(): Boolean
+    begin
+        exit(RunFixedAssetOnAfterInsertEvent);
+    end;
+
+    internal procedure SetRequestRunInsuranceOnAfterInsertEvent(SetRunInsuranceOnAfterInsertEvent: Boolean)
+    begin
+        RunInsuranceOnAfterInsertEvent := SetRunInsuranceOnAfterInsertEvent;
+    end;
+
+    internal procedure IsRequestRunInsuranceOnAfterInsertEventDefaultDim(): Boolean
+    begin
+        exit(RunInsuranceOnAfterInsertEvent);
+    end;
+
+    internal procedure SetRequestRunResponsibilityCenterOnAfterInsertEvent(SetRunResponsibilityCenterOnAfterInsertEvent: Boolean)
+    begin
+        RunResponsibilityCenterOnAfterInsertEvent := SetRunResponsibilityCenterOnAfterInsertEvent;
+    end;
+
+    internal procedure IsRequestRunResponsibilityCenterOnAfterInsertEventDefaultDim(): Boolean
+    begin
+        exit(RunResponsibilityCenterOnAfterInsertEvent);
+    end;
+
+    internal procedure SetRequestRunSalespersonPurchaserOnAfterInsertEvent(SetRunSalespersonPurchaserOnAfterInsertEvent: Boolean)
+    begin
+        RunSalespersonPurchaserOnAfterInsertEvent := SetRunSalespersonPurchaserOnAfterInsertEvent;
+    end;
+
+    internal procedure IsRequestRunSalespersonPurchaserOnAfterInsertEventDefaultDim(): Boolean
+    begin
+        exit(RunSalespersonPurchaserOnAfterInsertEvent);
+    end;
+
+    internal procedure SetRequestRunCampaignOnAfterInsertEvent(SetRunCampaignOnAfterInsertEvent: Boolean)
+    begin
+        RunCampaignOnAfterInsertEvent := SetRunCampaignOnAfterInsertEvent;
+    end;
+
+    internal procedure IsRequestRunCampaignOnAfterInsertEventDefaultDim(): Boolean
+    begin
+        exit(RunCampaignOnAfterInsertEvent);
+    end;
+
+    internal procedure SetRequestRunCashFlowManualExpenseOnAfterInsertEvent(SetRunCashFlowManualExpenseOnAfterInsertEvent: Boolean)
+    begin
+        RunCashFlowManualExpenseOnAfterInsertEvent := SetRunCashFlowManualExpenseOnAfterInsertEvent;
+    end;
+
+    internal procedure IsRequestRunCashFlowManualExpenseOnAfterInsertEventDefaultDim(): Boolean
+    begin
+        exit(RunCashFlowManualExpenseOnAfterInsertEvent);
+    end;
+
+    internal procedure SetRequestRunCashFlowManualRevenueOnAfterInsertEvent(SetRunCashFlowManualRevenueOnAfterInsertEvent: Boolean)
+    begin
+        RunCashFlowManualRevenueOnAfterInsertEvent := SetRunCashFlowManualRevenueOnAfterInsertEvent;
+    end;
+
+    internal procedure IsRequestRunCashFlowManualRevenueOnAfterInsertEventDefaultDim(): Boolean
+    begin
+        exit(RunCashFlowManualRevenueOnAfterInsertEvent);
+    end;
+
+    internal procedure SetRequestRunVendorTemplOnAfterInsertEvent(SetRunVendorTemplOnAfterInsertEvent: Boolean)
+    begin
+        RunVendorTemplOnAfterInsertEvent := SetRunVendorTemplOnAfterInsertEvent;
+    end;
+
+    internal procedure IsRequestRunVendorTemplOnAfterInsertEventDefaultDim(): Boolean
+    begin
+        exit(RunVendorTemplOnAfterInsertEvent);
+    end;
+
+    internal procedure SetRequestRunCustomerTemplOnAfterInsertEvent(SetRunCustomerTemplOnAfterInsertEvent: Boolean)
+    begin
+        RunCustomerTemplOnAfterInsertEvent := SetRunCustomerTemplOnAfterInsertEvent;
+    end;
+
+    internal procedure IsRequestRunCustomerTemplOnAfterInsertEventDefaultDim(): Boolean
+    begin
+        exit(RunCustomerTemplOnAfterInsertEvent);
+    end;
+
+    internal procedure SetRequestRunItemTemplOnAfterInsertEvent(SetRunItemTemplOnAfterInsertEvent: Boolean)
+    begin
+        RunItemTemplOnAfterInsertEvent := SetRunItemTemplOnAfterInsertEvent;
+    end;
+
+    internal procedure IsRequestRunItemTemplOnAfterInsertEventDefaultDim(): Boolean
+    begin
+        exit(RunItemTemplOnAfterInsertEvent);
+    end;
+
+    internal procedure SetRequestRunEmployeeTemplOnAfterInsertEvent(SetRunEmployeeTemplOnAfterInsertEvent: Boolean)
+    begin
+        RunEmployeeTemplOnAfterInsertEvent := SetRunEmployeeTemplOnAfterInsertEvent;
+    end;
+
+    internal procedure IsRequestRunEmployeeTemplOnAfterInsertEventDefaultDim(): Boolean
+    begin
+        exit(RunEmployeeTemplOnAfterInsertEvent);
+    end;
+
+    internal procedure SetRequestRunWorkCenterOnAfterInsertEvent(SetRunWorkCenterOnAfterInsertEvent: Boolean)
+    begin
+        RunWorkCenterOnAfterInsertEvent := SetRunWorkCenterOnAfterInsertEvent;
+    end;
+
+    internal procedure IsRequestRunWorkCenterOnAfterInsertEventDefaultDim(): Boolean
+    begin
+        exit(RunWorkCenterOnAfterInsertEvent);
+    end;
+
+    internal procedure SetRequestRunItemChargeOnAfterInsertEvent(SetRunItemChargeOnAfterInsertEvent: Boolean)
+    begin
+        RunItemChargeOnAfterInsertEvent := SetRunItemChargeOnAfterInsertEvent;
+    end;
+
+    internal procedure IsRequestRunItemChargeOnAfterInsertEventDefaultDim(): Boolean
+    begin
+        exit(RunItemchargeOnAfterInsertEvent);
     end;
 }

@@ -16,14 +16,14 @@ using Microsoft.Utilities;
 using System.Email;
 using System.Globalization;
 using System.Security.User;
+using System.Text;
 using System.Utilities;
 
 report 31182 "Reminder CZL"
 {
-    DefaultLayout = RDLC;
-    RDLCLayout = './Src/Reports/Reminder.rdl';
     Caption = 'Reminder';
     PreviewMode = PrintLayout;
+    DefaultRenderingLayout = "Reminder.rdl";
     WordMergeDataItem = "Issued Reminder Header";
 
     dataset
@@ -144,13 +144,13 @@ report 31182 "Reminder CZL"
             column(PostingDate_IssuedReminderHeaderCaption; FieldCaption("Posting Date"))
             {
             }
-            column(PostingDate_IssuedReminderHeader; "Posting Date")
+            column(PostingDate_IssuedReminderHeader; Format("Posting Date"))
             {
             }
             column(DocumentDate_IssuedReminderHeaderCaption; FieldCaption("Document Date"))
             {
             }
-            column(DocumentDate_IssuedReminderHeader; "Document Date")
+            column(DocumentDate_IssuedReminderHeader; Format("Document Date"))
             {
             }
             column(CurrencyCode_IssuedReminderHeader; "Currency Code")
@@ -197,7 +197,7 @@ report 31182 "Reminder CZL"
                     column(DocumentDate_IssuedReminderLineCaption; FieldCaption("Document Date"))
                     {
                     }
-                    column(DocumentDate_IssuedReminderLine; "Document Date")
+                    column(DocumentDate_IssuedReminderLine; Format("Document Date"))
                     {
                     }
                     column(DocumentType_IssuedReminderLineCaption; FieldCaption("Document Type"))
@@ -215,7 +215,7 @@ report 31182 "Reminder CZL"
                     column(DueDate_IssuedReminderLineCaption; FieldCaption("Due Date"))
                     {
                     }
-                    column(DueDate_IssuedReminderLine; FormatDate("Due Date"))
+                    column(DueDate_IssuedReminderLine; Format("Due Date"))
                     {
                     }
                     column(OriginalAmount_IssuedReminderLineCaption; FieldCaption("Original Amount"))
@@ -224,10 +224,16 @@ report 31182 "Reminder CZL"
                     column(OriginalAmount_IssuedReminderLine; "Original Amount")
                     {
                     }
+                    column(Formatted_OriginalAmount_IssuedReminderLineCaption; format("Original Amount", 0, AutoFormat.ResolveAutoFormat(Enum::"Auto Format"::AmountFormat, "Issued Reminder Header"."Currency Code")))
+                    {
+                    }
                     column(RemainingAmount_IssuedReminderLineCaption; FieldCaption("Remaining Amount"))
                     {
                     }
                     column(RemainingAmount_IssuedReminderLine; "Remaining Amount")
+                    {
+                    }
+                    column(Formatted_RemainingAmount_IssuedReminderLine; format("Remaining Amount", 0, AutoFormat.ResolveAutoFormat(Enum::"Auto Format"::AmountFormat, "Issued Reminder Header"."Currency Code")))
                     {
                     }
                     column(Description_IssuedReminderLineCaption; FieldCaption(Description))
@@ -246,6 +252,9 @@ report 31182 "Reminder CZL"
                     {
                     }
                     column(AmountInclVAT; AmountInclVAT)
+                    {
+                    }
+                    column(Formatted_AmountInclVAT; format(AmountInclVAT, 0, AutoFormat.ResolveAutoFormat(Enum::"Auto Format"::AmountFormat, "Issued Reminder Header"."Currency Code")))
                     {
                     }
                     column(LineAmountText; LineAmountText)
@@ -294,7 +303,7 @@ report 31182 "Reminder CZL"
                     DataItemLink = "Reminder No." = field("No.");
                     DataItemLinkReference = "Issued Reminder Header";
                     DataItemTableView = sorting("Reminder No.", "Line No.");
-                    column(DocumentDate_NotDueLine; "Document Date")
+                    column(DocumentDate_NotDueLine; Format("Document Date"))
                     {
                     }
                     column(DocumentType_NotDueLine; "Document Type")
@@ -303,13 +312,19 @@ report 31182 "Reminder CZL"
                     column(DocumentNo_NotDueLine; "Document No.")
                     {
                     }
-                    column(DueDate_NotDueLine; FormatDate("Due Date"))
+                    column(DueDate_NotDueLine; Format("Due Date"))
                     {
                     }
                     column(OriginalAmount_NotDueLine; "Original Amount")
                     {
                     }
+                    column(Formatted_OriginalAmount_NotDueLine; format("Original Amount", 0, AutoFormat.ResolveAutoFormat(Enum::"Auto Format"::AmountFormat, "Issued Reminder Header"."Currency Code")))
+                    {
+                    }
                     column(RemainingAmount_NotDueLine; "Remaining Amount")
+                    {
+                    }
+                    column(Formatted_RemainingAmount_NotDueLine; format("Remaining Amount", 0, AutoFormat.ResolveAutoFormat(Enum::"Auto Format"::AmountFormat, "Issued Reminder Header"."Currency Code")))
                     {
                     }
                     column(Description_NotDueLine; Description)
@@ -351,6 +366,27 @@ report 31182 "Reminder CZL"
                     column(TotalLineAmount; TotalLineAmount)
                     {
                     }
+                    column(Formatted_TotalLineAmount; format(TotalLineAmount, 0, AutoFormat.ResolveAutoFormat(Enum::"Auto Format"::AmountFormat, "Issued Reminder Header"."Currency Code")))
+                    {
+                    }
+                    column(GreetingText; GreetingTxt)
+                    {
+                    }
+                    column(BodyText; BodyTxt)
+                    {
+                    }
+                    column(ClosingText; ClosingTxt)
+                    {
+                    }
+                    column(DescriptionText; DescriptionTxt)
+                    {
+                    }
+                    trigger OnPreDataItem()
+                    var
+                        ReminderCommunication: Codeunit "Reminder Communication";
+                    begin
+                        ReminderCommunication.PopulateEmailText("Issued Reminder Header", "Company Information", GreetingTxt, AmtDueTxt, BodyTxt, ClosingTxt, DescriptionTxt, TotalLineAmount);
+                    end;
                 }
                 dataitem("User Setup"; "User Setup")
                 {
@@ -461,6 +497,24 @@ report 31182 "Reminder CZL"
         end;
     }
 
+    rendering
+    {
+        layout("Reminder.rdl")
+        {
+            Type = RDLC;
+            LayoutFile = './Src/Reports/Reminder.rdl';
+            Caption = 'Reminder (RDL)';
+            Summary = 'The Reminder (RDL) provides a detailed layout.';
+        }
+        layout("ReminderEmail.docx")
+        {
+            Type = Word;
+            LayoutFile = './Src/Reports/ReminderEmail.docx';
+            Caption = 'Reminder Email (Word)';
+            Summary = 'The Reminder Email (Word) provides an email body layout.';
+        }
+    }
+
     trigger OnPreReport()
     begin
         if not CurrReport.UseRequestPage then
@@ -472,31 +526,38 @@ report 31182 "Reminder CZL"
         FormatAddress: Codeunit "Format Address";
         FormatDocumentMgtCZL: Codeunit "Format Document Mgt. CZL";
         SegManagement: Codeunit SegManagement;
-        AmtDueTxt: Text;
-        LineAmountText: Text;
-        CompanyAddr: array[8] of Text[100];
+        AutoFormat: Codeunit "Auto Format";
+        LogInteractionEnable: Boolean;
+        TotalLbl: Label 'Total';
         DocumentLbl: Label 'Reminder';
         PageLbl: Label 'Page';
         CopyLbl: Label 'Copy';
         VendLbl: Label 'Vendor';
         CustLbl: Label 'Customer';
-        CustAddr: array[8] of Text[100];
-        DocFooterText: Text[1000];
-        NoOfCopies: Integer;
-        NoOfLoops: Integer;
-        LogInteraction: Boolean;
-        LogInteractionEnable: Boolean;
-        TotalLbl: Label 'Total';
-        ShowNotDueAmounts: Boolean;
-        AmountInclVAT: Decimal;
-        LineAmount: Decimal;
-        TotalLineAmount: Decimal;
         CreatorLbl: Label 'Created by';
         InterestAmountLbl: Label 'Interest Amount';
         GreetingLbl: Label 'Hello';
         AmtDueLbl: Label 'You are receiving this email to formally notify you that payment owed by you is past due. The payment was due on %1. Enclosed is a copy of invoice with the details of remaining amount.', Comment = '%1 = A due date';
         BodyLbl: Label 'If you have already made the payment, please disregard this email. Thank you for your business.';
         ClosingLbl: Label 'Sincerely';
+
+    protected var
+        CompanyAddr: array[8] of Text[100];
+        CustAddr: array[8] of Text[100];
+        DocFooterText: Text[1000];
+        NoOfCopies: Integer;
+        NoOfLoops: Integer;
+        LogInteraction: Boolean;
+        ShowNotDueAmounts: Boolean;
+        AmtDueTxt: Text;
+        GreetingTxt: Text;
+        BodyTxt: Text;
+        ClosingTxt: Text;
+        DescriptionTxt: Text;
+        LineAmountText: Text;
+        AmountInclVAT: Decimal;
+        LineAmount: Decimal;
+        TotalLineAmount: Decimal;
 
     procedure InitializeRequest(NoOfCopiesFrom: Integer; LogInteractionFrom: Boolean; ShowNotDueAmountsFrom: Boolean)
     begin
@@ -515,10 +576,5 @@ report 31182 "Reminder CZL"
         MailManagement: Codeunit "Mail Management";
     begin
         exit(CurrReport.Preview or MailManagement.IsHandlingGetEmailBody());
-    end;
-
-    local procedure FormatDate(DateValue: Date): Text
-    begin
-        exit(Format(DateValue, 0, '<Day>.<Month>.<Year4>'));
     end;
 }

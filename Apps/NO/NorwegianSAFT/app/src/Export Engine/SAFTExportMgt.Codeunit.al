@@ -1,4 +1,4 @@
-﻿// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License. See License.txt in the project root for license information.
 // ------------------------------------------------------------------------------------------------
@@ -8,15 +8,13 @@ using Microsoft.Finance.Currency;
 using Microsoft.Finance.GeneralLedger.Ledger;
 using Microsoft.Finance.GeneralLedger.Setup;
 using Microsoft.Finance.VAT.Reporting;
-#if not CLEAN23
-using Microsoft.Finance.VAT.Setup;
-#endif
 using Microsoft.Foundation.Company;
 using Microsoft.Utilities;
 using System;
 using System.Environment;
 using System.IO;
 using System.Reflection;
+using System.Telemetry;
 using System.Utilities;
 
 codeunit 10675 "SAF-T Export Mgt."
@@ -38,6 +36,7 @@ codeunit 10675 "SAF-T Export Mgt."
         RestartExportQst: Label 'Do you want to restart the export to get a new SAF-T file?';
         SetStartDateTimeAsCurrentQst: Label 'The Earliest Start Date/Time field is not filled in. Do you want to proceed and start the export immediately?';
         SAFTExportTxt: Label 'SAF-T Export';
+        SAFTExportTelemetryCategoryTxt: Label 'SAF-T', Locked = true;
         StartingExportTxt: Label 'Starting SAF-T export with ID: %1, Parallel: %2, Split By Month: %3', Comment = '%1 - integer; %2,%3 - boolean';
         CancellingExportTxt: Label 'Cancelling SAF-T Export with ID: %1, Task ID: %2', Comment = '%1 - integer; %2 - GUID';
         NotPossibleToScheduleMsg: Label 'You are not allowed to schedule the SAF-T file generation';
@@ -70,7 +69,7 @@ codeunit 10675 "SAF-T Export Mgt."
         SendTraceTagOfExport(SAFTExportTxt, GetStartTraceTagMessage(SAFTExportHeader));
         CreateExportLines(SAFTExportHeader);
 
-        SAFTExportHeader.validate(Status, SAFTExportHeader.Status::"In Progress");
+        SAFTExportHeader.Validate(Status, SAFTExportHeader.Status::"In Progress");
         SAFTExportHeader.Validate("Execution Start Date/Time", TypeHelper.GetCurrentDateTimeInUserTimeZone());
         SAFTExportHeader.Validate("Execution End Date/Time", 0DT);
         CalculateGLEntryTotals(SAFTExportHeader);
@@ -151,8 +150,12 @@ codeunit 10675 "SAF-T Export Mgt."
     end;
 
     procedure SendTraceTagOfExport(Category: Text; TraceTagMessage: Text)
+    var
+        Telemetry: Codeunit Telemetry;
+        CustomDimensions: Dictionary of [Text, Text];
     begin
-        Session.LogMessage('0000A4J', TraceTagMessage, Verbosity::Normal, DataClassification::SystemMetadata, TelemetryScope::ExtensionPublisher, 'Category', Category);
+        CustomDimensions.Add('Category', Category);
+        Telemetry.LogMessage('0000A4J', TraceTagMessage, Verbosity::Normal, DataClassification::SystemMetadata, TelemetryScope::ExtensionPublisher, CustomDimensions);
     end;
 
     procedure UpdateExportStatus(var SAFTExportHeader: Record "SAF-T Export Header")
@@ -195,7 +198,7 @@ codeunit 10675 "SAF-T Export Mgt."
         if not SAFTExportHeader."Parallel Processing" then
             exit;
 
-        NoOfJobs := GetNoOfJobsInProgress();
+        NoOfJobs := GetNoOfJobsInProgress(SAFTExportHeader);
         LogState(SAFTExportLine, StrSubstNo(NoOfJobsInProgressTxt, NoOfJobs), false);
         if NoOfJobs > SAFTExportHeader."Max No. Of Jobs" then
             exit;
@@ -244,11 +247,11 @@ codeunit 10675 "SAF-T Export Mgt."
                 exit;
             CalcFields("Detailed Info");
             if not "Detailed Info".HasValue() then
-                LogInternalError(NoErrorMessageErr, DataClassification::SystemMetadata, Verbosity::Error);
+                Session.LogMessage('0000M0J', NoErrorMessageErr, Verbosity::Error, DataClassification::SystemMetadata, TelemetryScope::ExtensionPublisher, 'Category', SAFTExportTelemetryCategoryTxt);
             "Detailed Info".CreateInStream(Stream);
             Stream.ReadText(ErrorMessage);
             if ErrorMessage = '' then
-                LogInternalError(NoErrorMessageErr, DataClassification::SystemMetadata, Verbosity::Error);
+                Session.LogMessage('0000M0K', NoErrorMessageErr, Verbosity::Error, DataClassification::SystemMetadata, TelemetryScope::ExtensionPublisher, 'Category', SAFTExportTelemetryCategoryTxt);
             Message(ErrorMessage);
         end;
     end;
@@ -319,7 +322,7 @@ codeunit 10675 "SAF-T Export Mgt."
             else
                 SAFTExportLine."Task ID" :=
                     TaskScheduler.CreateTask(
-                        codeunit::"Generate SAF-T File", Codeunit::"SAF-T Export Error Handler", true, CompanyName(),
+                        GetContentCodeunit(SAFTExportHeader), Codeunit::"SAF-T Export Error Handler", true, CompanyName(),
                         NotBefore, SAFTExportLine.RecordId());
             SAFTExportLine.Modify(true);
             Commit();
@@ -331,7 +334,7 @@ codeunit 10675 "SAF-T Export Mgt."
         Commit();
 
         ClearLastError();
-        if not codeunit.Run(codeunit::"Generate SAF-T File", SAFTExportLine) then
+        if not codeunit.Run(GetContentCodeunit(SAFTExportHeader), SAFTExportLine) then
             codeunit.Run(codeunit::"SAF-T Export Error Handler", SAFTExportLine);
         Commit();
     end;
@@ -537,7 +540,7 @@ codeunit 10675 "SAF-T Export Mgt."
     begin
         SAFTExportFile.SetRange("Export ID", SAFTExportHeader.ID);
         if not SAFTExportFile.FindSet() then
-            LogInternalError(NoZipFileGeneratedErr, DataClassification::SystemMetadata, Verbosity::Error);
+            Session.LogMessage('0000M0L', NoZipFileGeneratedErr, Verbosity::Error, DataClassification::SystemMetadata, TelemetryScope::ExtensionPublisher, 'Category', SAFTExportTelemetryCategoryTxt);
         repeat
             SAFTExportFile.CalcFields("SAF-T File");
             SAFTExportFile."SAF-T File".CreateInStream(ZipFileInStream);
@@ -750,26 +753,14 @@ codeunit 10675 "SAF-T Export Mgt."
 
     procedure GetAmountInfoFromGLEntry(var AmountXMLNode: Text; var Amount: Decimal; GLEntry: Record "G/L Entry")
     begin
-        if GLEntry."Debit Amount" = 0 then begin
+        if GLEntry.Amount > 0 then
+            AmountXMLNode := 'DebitAmount'
+        else
             AmountXMLNode := 'CreditAmount';
-            Amount := GLEntry."Credit Amount";
-        end else begin
-            AmountXMLNode := 'DebitAmount';
-            Amount := GLEntry."Debit Amount";
-        end;
+
+        Amount := Abs(GLEntry.Amount);
     end;
 
-#if not CLEAN23
-    [Obsolete('Use GetNotApplicableVATCode() instead', '23.0')]
-    procedure GetNotApplicationVATCode(): Code[10]
-    var
-        SAFTSetup: Record "SAF-T Setup";
-        VATCode: Record "VAT Code";
-    begin
-        SAFTSetup.Get();
-        exit(copystr(SAFTSetup."Not Applicable VAT Code", 1, MaxStrLen(VATCode.Code)));
-    end;
-#endif
     procedure GetNotApplicableVATCode(): Code[20]
     var
         SAFTSetup: Record "SAF-T Setup";
@@ -817,11 +808,11 @@ codeunit 10675 "SAF-T Export Mgt."
         exit(not SessionEvent.IsEmpty());
     end;
 
-    local procedure GetNoOfJobsInProgress(): Integer
+    local procedure GetNoOfJobsInProgress(SAFTExportHeader: Record "SAF-T Export Header"): Integer
     var
         ScheduledTask: Record "Scheduled Task";
     begin
-        ScheduledTask.SetRange("Run Codeunit", Codeunit::"Generate SAF-T File");
+        ScheduledTask.SetRange("Run Codeunit", GetContentCodeunit(SAFTExportHeader));
         exit(ScheduledTask.Count());
     end;
 
@@ -854,6 +845,18 @@ codeunit 10675 "SAF-T Export Mgt."
         exit(true);
     end;
 
+    local procedure GetContentCodeunit(SAFTExportHeader: Record "SAF-T Export Header") CodeunitId: Integer
+    begin
+        case SAFTExportHeader.Version of
+            SAFTExportHeader.Version::"1.20":
+                exit(Codeunit::"Generate SAF-T File");
+            SAFTExportHeader.Version::"1.30":
+                exit(Codeunit::"Generate SAF-T 1.3 File");
+            else
+                OnGetContentCodeunitOnElse(CodeunitId, SAFTExportHeader);
+        end;
+    end;
+
     [IntegrationEvent(false, false)]
     local procedure OnBeforeScheduleTask(var DoNotScheduleTask: Boolean; var TaskID: Guid)
     begin
@@ -861,6 +864,11 @@ codeunit 10675 "SAF-T Export Mgt."
 
     [IntegrationEvent(false, false)]
     local procedure OnBeforeCancelTask(var DoNotCancelTask: Boolean)
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnGetContentCodeunitOnElse(var CodeunitID: Integer; SAFTExportHeader: Record "SAF-T Export Header")
     begin
     end;
 }

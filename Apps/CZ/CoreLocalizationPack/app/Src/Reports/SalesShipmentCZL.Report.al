@@ -151,13 +151,13 @@ report 31191 "Sales Shipment CZL"
             column(DocumentDate_SalesShipmentHeaderCaption; FieldCaption("Document Date"))
             {
             }
-            column(DocumentDate_SalesShipmentHeader; "Document Date")
+            column(DocumentDate_SalesShipmentHeader; Format("Document Date"))
             {
             }
             column(ShipmentDate_SalesShipmentHeaderCaption; FieldCaption("Shipment Date"))
             {
             }
-            column(ShipmentDate_SalesShipmentHeader; "Shipment Date")
+            column(ShipmentDate_SalesShipmentHeader; Format("Shipment Date"))
             {
             }
             column(OrderNo_SalesShipmentHeaderCaption; FieldCaption("Order No."))
@@ -271,6 +271,9 @@ report 31191 "Sales Shipment CZL"
                     begin
                         if not ShowCorrectionLines and "Sales Shipment Line".Correction then
                             CurrReport.Skip();
+
+                        if FormatDocument.HideDocumentLine(HideLinesWithZeroQuantity, "Sales Shipment Line", FieldNo(Quantity)) then
+                            CurrReport.Skip();
                     end;
                 }
                 dataitem(ItemTrackingLine; "Integer")
@@ -288,7 +291,7 @@ report 31191 "Sales Shipment CZL"
                     column(SerNo_TrackingSpecBuffer; TempTrackingSpecification."Serial No.")
                     {
                     }
-                    column(Expiration_TrackingSpecBuffer; TempTrackingSpecification."Expiration Date")
+                    column(Expiration_TrackingSpecBuffer; Format(TempTrackingSpecification."Expiration Date"))
                     {
                     }
                     column(Quantity_TrackingSpecBuffer; TempTrackingSpecification."Quantity (Base)")
@@ -475,6 +478,12 @@ report 31191 "Sales Shipment CZL"
                         Caption = 'Show Serial/Lot Number Appendix';
                         ToolTip = 'Specifies when the show serial/lot number appendixis to be show';
                     }
+                    field(HideLinesWithZeroQuantityControl; HideLinesWithZeroQuantity)
+                    {
+                        ApplicationArea = Basic, Suite;
+                        ToolTip = 'Specifies if the lines with zero quantity are printed.';
+                        Caption = 'Hide lines with zero quantity';
+                    }
                 }
             }
         }
@@ -496,8 +505,6 @@ report 31191 "Sales Shipment CZL"
     end;
 
     var
-        ShipmentMethod: Record "Shipment Method";
-        TempTrackingSpecification: Record "Tracking Specification" temporary;
         ItemTrackingAppendix: Report "Item Tracking Appendix";
         LanguageMgt: Codeunit Language;
         FormatAddress: Codeunit "Format Address";
@@ -505,22 +512,9 @@ report 31191 "Sales Shipment CZL"
         FormatDocumentMgtCZL: Codeunit "Format Document Mgt. CZL";
         SegManagement: Codeunit SegManagement;
         ItemTrackingDocManagement: Codeunit "Item Tracking Doc. Management";
-        CompanyAddr: array[8] of Text[100];
-        CustAddr: array[8] of Text[100];
-        ShipToAddr: array[8] of Text[100];
-        DocFooterText: Text[1000];
-        NoOfCopies: Integer;
-        NoOfLoops: Integer;
         OldRefNo: Integer;
         OldNo: Code[20];
-        LogInteraction: Boolean;
-        ShowCorrectionLines: Boolean;
         LogInteractionEnable: Boolean;
-        ShowLotSN: Boolean;
-        ShowTotal: Boolean;
-        ShowGroup: Boolean;
-        TotalQty: Decimal;
-        TrackingSpecCount: Integer;
         DocumentLbl: Label 'Shipment';
         PageLbl: Label 'Page';
         CopyLbl: Label 'Copy';
@@ -543,6 +537,24 @@ report 31191 "Sales Shipment CZL"
         DescriptionCaptionLbl: Label 'Description';
         NoCaptionLbl: Label 'No.';
         ExpirationDateLbl: Label 'Expiration Date';
+
+    protected var
+        ShipmentMethod: Record "Shipment Method";
+        TempTrackingSpecification: Record "Tracking Specification" temporary;
+        CompanyAddr: array[8] of Text[100];
+        CustAddr: array[8] of Text[100];
+        ShipToAddr: array[8] of Text[100];
+        DocFooterText: Text[1000];
+        NoOfCopies: Integer;
+        NoOfLoops: Integer;
+        TrackingSpecCount: Integer;
+        LogInteraction: Boolean;
+        ShowCorrectionLines: Boolean;
+        ShowGroup: Boolean;
+        ShowLotSN: Boolean;
+        ShowTotal: Boolean;
+        TotalQty: Decimal;
+        HideLinesWithZeroQuantity: Boolean;
 
     procedure InitLogInteraction()
     begin

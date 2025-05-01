@@ -145,6 +145,7 @@ table 40105 "GP Company Additional Settings"
             begin
                 if not Rec."Migrate Payables Module" then begin
                     Rec.Validate("Migrate Inactive Vendors", false);
+                    Rec.Validate("Migrate Temporary Vendors", false);
                     Rec.Validate("Migrate Open POs", false);
                     Rec.Validate("Migrate Vendor Classes", false);
                     Rec.Validate("Migrate Only Payables Master", false);
@@ -181,6 +182,7 @@ table 40105 "GP Company Additional Settings"
                     Rec.Validate("Migrate Inactive Items", false);
                     Rec.Validate("Migrate Discontinued Items", false);
                     Rec.Validate("Migrate Hist. Inv. Trx.", false);
+                    Rec.Validate("Migrate Kit Items", false);
                 end;
             end;
         }
@@ -431,6 +433,38 @@ table 40105 "GP Company Additional Settings"
                 end;
             end;
         }
+        field(41; "Skip Posting Item Batches"; Boolean)
+        {
+            DataClassification = SystemMetadata;
+            InitValue = false;
+        }
+        field(42; "Has Hybrid Company"; Boolean)
+        {
+            FieldClass = FlowField;
+            CalcFormula = exist("Hybrid Company" where("Name" = field(Name)));
+        }
+        field(43; "Migrate Temporary Vendors"; Boolean)
+        {
+            DataClassification = SystemMetadata;
+            InitValue = true;
+
+            trigger OnValidate()
+            begin
+                if Rec."Migrate Temporary Vendors" then
+                    Rec.Validate("Migrate Payables Module", true);
+            end;
+        }
+        field(44; "Migrate Kit Items"; Boolean)
+        {
+            DataClassification = SystemMetadata;
+            InitValue = true;
+
+            trigger OnValidate()
+            begin
+                if Rec."Migrate Kit Items" then
+                    Rec.Validate("Migrate Inventory Module", true);
+            end;
+        }
     }
 
     keys
@@ -489,7 +523,7 @@ table 40105 "GP Company Additional Settings"
         exit(Rec."Migrate Inventory Module");
     end;
 
-    // Inactives
+    // Additional records to migrate
     procedure GetMigrateInactiveCheckbooks(): Boolean
     begin
         GetSingleInstance();
@@ -508,6 +542,12 @@ table 40105 "GP Company Additional Settings"
         exit(Rec."Migrate Inactive Vendors");
     end;
 
+    procedure GetMigrateTemporaryVendors(): Boolean
+    begin
+        GetSingleInstance();
+        exit(Rec."Migrate Temporary Vendors");
+    end;
+
     procedure GetMigrateInactiveItems(): Boolean
     begin
         GetSingleInstance();
@@ -518,6 +558,12 @@ table 40105 "GP Company Additional Settings"
     begin
         GetSingleInstance();
         exit(Rec."Migrate Discontinued Items");
+    end;
+
+    procedure GetMigrateKitItems(): Boolean
+    begin
+        GetSingleInstance();
+        exit(Rec."Migrate Kit Items");
     end;
 
     // Classes
@@ -577,7 +623,8 @@ table 40105 "GP Company Additional Settings"
         exit(Rec."Skip Posting Account Batches" and
              Rec."Skip Posting Customer Batches" and
              Rec."Skip Posting Vendor Batches" and
-             Rec."Skip Posting Bank Batches");
+             Rec."Skip Posting Bank Batches" and
+             Rec."Skip Posting Item Batches");
     end;
 
     procedure GetSkipPostingAccountBatches(): Boolean
@@ -602,6 +649,12 @@ table 40105 "GP Company Additional Settings"
     begin
         GetSingleInstance();
         exit(Rec."Skip Posting Bank Batches");
+    end;
+
+    procedure GetSkipPostingItemBatches(): Boolean
+    begin
+        GetSingleInstance();
+        exit(Rec."Skip Posting Item Batches");
     end;
 
     // Other

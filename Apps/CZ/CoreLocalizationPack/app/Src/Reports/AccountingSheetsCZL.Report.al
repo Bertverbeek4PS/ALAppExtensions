@@ -6,9 +6,6 @@ namespace Microsoft.Finance.GeneralLedger.Reports;
 
 using Microsoft.Finance.GeneralLedger.Account;
 using Microsoft.Finance.GeneralLedger.Ledger;
-#if not CLEAN22
-using Microsoft.Finance.VAT.Calculation;
-#endif
 using Microsoft.Foundation.Company;
 using Microsoft.Purchases.History;
 using Microsoft.Sales.History;
@@ -162,12 +159,6 @@ report 11703 "Accounting Sheets CZL"
                 FCYRate := 0;
                 if ("Currency Code" <> '') and ("Currency Factor" <> 0) then
                     FCYRate := 1 / "Currency Factor";
-#if not CLEAN22
-#pragma warning disable AL0432
-                if not ReplaceVATDateMgtCZL.IsEnabled() then
-                    "VAT Reporting Date" := "VAT Date CZL";
-#pragma warning restore AL0432
-#endif  
             end;
 
             trigger OnPreDataItem()
@@ -272,12 +263,6 @@ report 11703 "Accounting Sheets CZL"
                 FCYRate := 0;
                 if ("Currency Code" <> '') and ("Currency Factor" <> 0) then
                     FCYRate := 1 / "Currency Factor";
-#if not CLEAN22
-#pragma warning disable AL0432
-                if not ReplaceVATDateMgtCZL.IsEnabled() then
-                    "VAT Reporting Date" := "VAT Date CZL";
-#pragma warning restore AL0432
-#endif
             end;
 
             trigger OnPreDataItem()
@@ -385,12 +370,6 @@ report 11703 "Accounting Sheets CZL"
                 FCYRate := 0;
                 if ("Currency Code" <> '') and ("Currency Factor" <> 0) then
                     FCYRate := 1 / "Currency Factor";
-#if not CLEAN22
-#pragma warning disable AL0432
-                if not ReplaceVATDateMgtCZL.IsEnabled() then
-                    "VAT Reporting Date" := "VAT Date CZL";
-#pragma warning restore AL0432
-#endif
             end;
 
             trigger OnPreDataItem()
@@ -498,12 +477,6 @@ report 11703 "Accounting Sheets CZL"
                 FCYRate := 0;
                 if ("Currency Code" <> '') and ("Currency Factor" <> 0) then
                     FCYRate := 1 / "Currency Factor";
-#if not CLEAN22
-#pragma warning disable AL0432
-                if not ReplaceVATDateMgtCZL.IsEnabled() then
-                    "VAT Reporting Date" := "VAT Date CZL";
-#pragma warning restore AL0432
-#endif
             end;
 
             trigger OnPreDataItem()
@@ -652,6 +625,7 @@ report 11703 "Accounting Sheets CZL"
     trigger OnInitReport()
     begin
         GroupGLAccounts := true;
+        OnAfterOnInitReport(GroupGLAccounts);
     end;
 
     trigger OnPreReport()
@@ -673,27 +647,24 @@ report 11703 "Accounting Sheets CZL"
     var
         CompanyInformation: Record "Company Information";
         UserSetup: Record "User Setup";
-        TempGLEntry: Record "G/L Entry" temporary;
         GLEntry: Record "G/L Entry";
-#if not CLEAN22
-#pragma warning disable AL0432
-        ReplaceVATDateMgtCZL: Codeunit "Replace VAT Date Mgt. CZL";
-#pragma warning restore AL0432
-#endif
         LastDocNo: Code[20];
         FCYRate: Decimal;
         LastGLEntry: Integer;
-        LastDataItem: Integer;
-        GroupGLAccounts: Boolean;
-        SalesInvHdrExists: Boolean;
-        SalesCrMemoHdrExists: Boolean;
-        PurchInvHdrExists: Boolean;
-        PurchCrMemoHdrExists: Boolean;
-        GeneralDocExists: Boolean;
         GroupCaption: Text;
         GroupText: Text;
         GLAccountNameTxt: Label 'G/L Account Name';
         DescriptionTxt: Label 'Description';
+
+    protected var
+        TempGLEntry: Record "G/L Entry" temporary;
+        LastDataItem: Integer;
+        GeneralDocExists: Boolean;
+        GroupGLAccounts: Boolean;
+        PurchInvHdrExists: Boolean;
+        PurchCrMemoHdrExists: Boolean;
+        SalesInvHdrExists: Boolean;
+        SalesCrMemoHdrExists: Boolean;
 
     procedure GetLastDataItem(): Integer
     begin
@@ -746,5 +717,15 @@ report 11703 "Accounting Sheets CZL"
             exit(GLAccount.Name);
         end;
         exit(GLEntry.Description);
+    end;
+
+    procedure InitializeRequest(NewGroupGLAccounts: Boolean)
+    begin
+        GroupGLAccounts := NewGroupGLAccounts;
+    end;
+
+    [IntegrationEvent(true, false)]
+    local procedure OnAfterOnInitReport(var GroupGLAccounts: Boolean)
+    begin
     end;
 }

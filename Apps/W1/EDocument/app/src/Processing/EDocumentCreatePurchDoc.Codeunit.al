@@ -14,11 +14,12 @@ codeunit 6136 "E-Document Create Purch. Doc."
         CreatePurchaseDocument(SourceEDocument, SourceDocumentHeader, SourceDocumentLine, CreatedDocumentHeader)
     end;
 
-    internal procedure SetSource(var SourceEDocument2: Record "E-Document"; var SourceDocumentHeader2: RecordRef; var SourceDocumentLine2: RecordRef)
+    internal procedure SetSource(var SourceEDocument2: Record "E-Document"; var SourceDocumentHeader2: RecordRef; var SourceDocumentLine2: RecordRef; SourcePurchaseDocumentType2: Enum "Purchase Document Type")
     begin
         SourceEDocument := SourceEDocument2;
         SourceDocumentHeader := SourceDocumentHeader2;
         SourceDocumentLine := SourceDocumentLine2;
+        SourcePurchaseDocumentType := SourcePurchaseDocumentType2;
     end;
 
     internal procedure GetCreatedDocument(): RecordRef;
@@ -44,7 +45,7 @@ codeunit 6136 "E-Document Create Purch. Doc."
         DefaultDocumentLine.GetTable(DefaultPurchaseLine);
 
         // Create header
-        EDocumentImportHelper.ProcessField(EDocument, DocumentHeader, PurchaseHeader.FieldNo("Document Type"), TempDocumentHeader.Field(PurchaseHeader.FieldNo("Document Type")).Value());
+        EDocumentImportHelper.ProcessField(EDocument, DocumentHeader, PurchaseHeader.FieldNo("Document Type"), Format(SourcePurchaseDocumentType));
 
         OnCreateNewPurchHdrOnBeforeRecRefInsert(EDocument, TempDocumentHeader, DocumentHeader);
         DocumentHeader.Insert(true);
@@ -63,6 +64,10 @@ codeunit 6136 "E-Document Create Purch. Doc."
            (TempDocumentHeader.Field(PurchaseHeader.FieldNo("Pay-to Name")).Value() <> DefaultDocumentHeader.Field(PurchaseHeader.FieldNo("Pay-to Name")).Value())
         then
             EDocumentImportHelper.ProcessFieldNoValidate(DocumentHeader, PurchaseHeader.FieldNo("Pay-to Name"), TempDocumentHeader.Field(PurchaseHeader.FieldNo("Pay-to Name")).Value());
+
+        // Process date fields
+        DocumentHeader.Field(PurchaseHeader.FieldNo("Document Date")).Value(TempDocumentHeader.Field(PurchaseHeader.FieldNo("Document Date")).Value());
+        DocumentHeader.Field(PurchaseHeader.FieldNo("Due Date")).Value(TempDocumentHeader.Field(PurchaseHeader.FieldNo("Due Date")).Value());
 
         // Processing the rest of the header fields
         PurchaseField.Reset();
@@ -90,7 +95,7 @@ codeunit 6136 "E-Document Create Purch. Doc."
                 if (DocumentHeader.Field(PurchaseField."No.").Value() = DefaultDocumentHeader.Field(PurchaseField."No.").Value()) and
                    (TempDocumentHeader.Field(PurchaseField."No.").Value() <> DefaultDocumentHeader.Field(PurchaseField."No.").Value())
                 then
-                    EDocumentImportHelper.ProcessField(EDocument, DocumentHeader, PurchaseField."No.", TempDocumentHeader.Field(PurchaseField."No.").Value());
+                    EDocumentImportHelper.ProcessField(EDocument, DocumentHeader, PurchaseField, TempDocumentHeader.Field(PurchaseField."No."));
             until PurchaseField.Next() = 0;
 
         OnCreateNewPurchHdrOnBeforeRecRefModify(EDocument, TempDocumentHeader, DocumentHeader);
@@ -117,9 +122,9 @@ codeunit 6136 "E-Document Create Purch. Doc."
                 if Format(DocumentLine.Field(PurchaseLine.FieldNo(Type)).Value()) <> '0' then begin
                     EDocumentImportHelper.ProcessField(EDocument, DocumentLine, PurchaseLine.FieldNo("No."), TempDocumentLine.Field(PurchaseLine.FieldNo("No.")).Value());
                     EDocumentImportHelper.ProcessField(EDocument, DocumentLine, PurchaseLine.FieldNo(Description), TempDocumentLine.Field(PurchaseLine.FieldNo(Description)).Value());
-                    EDocumentImportHelper.ProcessField(EDocument, DocumentLine, PurchaseLine.FieldNo(Quantity), TempDocumentLine.Field(PurchaseLine.FieldNo(Quantity)).Value());
+                    EDocumentImportHelper.ProcessDecimalField(EDocument, DocumentLine, PurchaseLine.FieldNo(Quantity), TempDocumentLine.Field(PurchaseLine.FieldNo(Quantity)).Value());
                     EDocumentImportHelper.ProcessField(EDocument, DocumentLine, PurchaseLine.FieldNo("Unit of Measure Code"), TempDocumentLine.Field(PurchaseLine.FieldNo("Unit of Measure Code")).Value());
-                    EDocumentImportHelper.ProcessField(EDocument, DocumentLine, PurchaseLine.FieldNo("Direct Unit Cost"), TempDocumentLine.Field(PurchaseLine.FieldNo("Direct Unit Cost")).Value());
+                    EDocumentImportHelper.ProcessDecimalField(EDocument, DocumentLine, PurchaseLine.FieldNo("Direct Unit Cost"), TempDocumentLine.Field(PurchaseLine.FieldNo("Direct Unit Cost")).Value());
                 end;
 
                 // Processing the rest of the line fields
@@ -148,7 +153,7 @@ codeunit 6136 "E-Document Create Purch. Doc."
                         if (DocumentLine.Field(PurchaseField."No.").Value() = DefaultDocumentLine.Field(PurchaseField."No.").Value()) and
                            (TempDocumentLine.Field(PurchaseField."No.").Value() <> DefaultDocumentLine.Field(PurchaseField."No.").Value())
                         then
-                            EDocumentImportHelper.ProcessField(EDocument, DocumentLine, PurchaseField."No.", TempDocumentLine.Field(PurchaseField."No.").Value());
+                            EDocumentImportHelper.ProcessField(EDocument, DocumentLine, PurchaseField, TempDocumentLine.Field(PurchaseField."No."));
                     until PurchaseField.Next() = 0;
 
                 OnCreateNewPurchLineOnBeforeRecRefModify(EDocument, TempDocumentHeader, DocumentHeader, TempDocumentLine, DocumentLine);
@@ -180,6 +185,10 @@ codeunit 6136 "E-Document Create Purch. Doc."
         if Format(Value) <> '' then
             PurchaseHeader.Validate("VAT Base Discount %", Value);
 
+        Value := TempDocumentHeader.Field(PurchaseHeader.FieldNo("Prices Including VAT")).Value();
+        if Format(Value) <> '' then
+            PurchaseHeader.Validate("Prices Including VAT", Value);
+
         PurchaseHeader.Modify(true);
         RecRef.GetTable(PurchaseHeader);
     end;
@@ -188,6 +197,7 @@ codeunit 6136 "E-Document Create Purch. Doc."
         SourceEDocument: Record "E-Document";
         EDocumentImportHelper: Codeunit "E-Document Import Helper";
         SourceDocumentHeader, SourceDocumentLine, CreatedDocumentHeader : RecordRef;
+        SourcePurchaseDocumentType: Enum "Purchase Document Type";
 
     [IntegrationEvent(false, false)]
     local procedure OnCreateNewPurchHdrOnBeforeRecRefInsert(var EDocument: Record "E-Document"; var TempDocumentHeader: RecordRef; var DocumentHeader: RecordRef);

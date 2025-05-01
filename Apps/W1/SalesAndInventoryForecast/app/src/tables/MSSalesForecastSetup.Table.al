@@ -26,15 +26,6 @@ table 1853 "MS - Sales Forecast Setup"
             OptionMembers = Day,Week,Month,Quarter,Year;
             DataClassification = CustomerContent;
         }
-        field(3; "Show Setup Notification"; Boolean)
-        {
-            ObsoleteState = Removed;
-            ObsoleteReason = 'Notification is now using the My notifications table';
-            ObsoleteTag = '18.0';
-            Editable = false;
-            InitValue = true;
-            DataClassification = CustomerContent;
-        }
         field(4; "Stockout Warning Horizon"; Integer)
         {
             DataClassification = CustomerContent;
@@ -104,39 +95,6 @@ table 1853 "MS - Sales Forecast Setup"
             Editable = false;
             DataClassification = CustomerContent;
         }
-        field(15; "API Cache Minutes"; Integer)
-        {
-            Description = 'Default period in minutes for caching the API URI and API Key.';
-            InitValue = 5;
-            ObsoleteState = Removed;
-            ObsoleteReason = 'Not Used After Refactoring';
-            DataClassification = CustomerContent;
-            ObsoleteTag = '18.0';
-        }
-        field(16; "API Cache Expiry"; DateTime)
-        {
-            Description = 'Expiration datetime for the API URI and API Key.';
-            ObsoleteState = Removed;
-            ObsoleteReason = 'Not Used After Refactoring';
-            DataClassification = CustomerContent;
-            ObsoleteTag = '18.0';
-        }
-        field(17; "Service Pass API Uri ID"; Guid)
-        {
-            Description = 'The Key for retrieving the API URI from the Service Password table.';
-            ObsoleteState = Removed;
-            ObsoleteReason = 'Not Used After Refactoring';
-            DataClassification = CustomerContent;
-            ObsoleteTag = '18.0';
-        }
-        field(18; "Service Pass API Key ID"; Guid)
-        {
-            Description = 'The Key for retrieving the API Key from the Service Password table.';
-            ObsoleteState = Removed;
-            ObsoleteReason = 'Not Used After Refactoring';
-            DataClassification = CustomerContent;
-            ObsoleteTag = '18.0';
-        }
         field(19; "Timeseries Model"; Option)
         {
             OptionMembers = ARIMA,ETS,STL,"ETS+ARIMA","ETS+STL",ALL,TBATS;
@@ -179,53 +137,52 @@ table 1853 "MS - Sales Forecast Setup"
         CryptographyManagement: Codeunit "Cryptography Management";
     begin
         if not CryptographyManagement.IsEncryptionEnabled() then
-            CryptographyManagement.EnableEncryption(FALSE);
+            CryptographyManagement.EnableEncryption(false);
     end;
 
-    [NonDebuggable]
     procedure URIOrKeyEmpty(): Boolean
     var
         EnvironmentInfo: Codeunit "Environment Information";
     begin
         if EnvironmentInfo.IsSaaS() then
             exit(false);
-        exit((GetAPIUri() = '') or (GetAPIKey() = ''));
+        exit((GetAPIUri() = '') or GetAPIKeyAsSecret().IsEmpty());
     end;
 
-    [NonDebuggable]
     [Scope('OnPrem')]
-    procedure GetUserDefinedAPIKey(): Text[250]
+    procedure GetUserDefinedAPIKeyAsSecret(): SecretText
+    var
+        EmptyText: Text[250];
     begin
         // If the user has defined the API Key in the page UI, then retrieve it from
         // the encrypted Isolated Storage table
+        EmptyText := '';
         if IsNullGuid("API Key ID") then
-            exit('');
+            exit(EmptyText);
 
-        exit(TryReadAPICredential("API Key ID"));
+        exit(TryReadAPICredentialAsSecret("API Key ID"));
     end;
 
-    [NonDebuggable]
     [Scope('OnPrem')]
-    procedure SetUserDefinedAPIKey(UserDefinedAPIKey: Text[250])
+    procedure SetUserDefinedAPIKey(UserDefinedAPIKey: SecretText)
     begin
         // Store the user-defined API Key in the Isolated Storage and save its GUID in the "API Key ID"
-        if UserDefinedAPIKey = '' then begin
+        if UserDefinedAPIKey.IsEmpty() then begin
             DeleteAPICredential("API Key ID");
             exit;
         end;
         "API Key ID" := InsertAPICredential(UserDefinedAPIKey);
     end;
 
-    [NonDebuggable]
-    procedure GetAPIKey(): Text[250]
+    procedure GetAPIKeyAsSecret(): SecretText
     var
-        UserDefinedAPIKey: Text[250];
+        UserDefinedAPIKey: SecretText;
     begin
         // The API Key and URI entered by the user take precedence
-        UserDefinedAPIKey := GetUserDefinedAPIKey();
-        if UserDefinedAPIKey <> '' then
+        UserDefinedAPIKey := GetUserDefinedAPIKeyAsSecret();
+        if not UserDefinedAPIKey.IsEmpty() then
             exit(UserDefinedAPIKey);
-        exit('');
+        exit(UserDefinedAPIKey);
     end;
 
     procedure GetAPIUri(): Text[250]
@@ -236,29 +193,30 @@ table 1853 "MS - Sales Forecast Setup"
         exit('');
     end;
 
-    [NonDebuggable]
-    local procedure TryReadAPICredential(CredentialGUID: Guid): Text[250]
+    local procedure TryReadAPICredentialAsSecret(CredentialGUID: Guid): SecretText
     var
         CredentialValue: Text;
+        CredentialValueAsSecret: SecretText;
     begin
+        CredentialValue := '';
+        CredentialValueAsSecret := CredentialValue;
         if IsNullGuid(CredentialGUID) then
-            exit('');
+            exit(CredentialValueAsSecret);
 
         if not IsolatedStorage.Contains(CredentialGUID, Datascope::Company) then
-            exit('');
+            exit(CredentialValueAsSecret);
 
-        IsolatedStorage.Get(CredentialGUID, Datascope::Company, CredentialValue);
-        exit(CopyStr(CredentialValue, 1, 250));
+        IsolatedStorage.Get(CredentialGUID, Datascope::Company, CredentialValueAsSecret);
+        exit(CredentialValueAsSecret);
     end;
 
-    [NonDebuggable]
-    local procedure InsertAPICredential(NewValue: Text[250]): Guid
+    local procedure InsertAPICredential(NewValue: SecretText): Guid
     var
         NewKey: Text;
     begin
         NewKey := FORMAT(CreateGuid());
 
-        IF NOT EncryptionEnabled() THEN
+        if not EncryptionEnabled() then
             IsolatedStorage.Set(NewKey, NewValue, Datascope::Company)
         else
             IsolatedStorage.SetEncrypted(NewKey, NewValue, Datascope::Company);
@@ -272,7 +230,7 @@ table 1853 "MS - Sales Forecast Setup"
         Modify();
 
         // Delete the stored API Key from Isolated Storage table
-        if not IsolatedStorage.Contains(KeyId, Datascope::Company) THEN
+        if not IsolatedStorage.Contains(KeyId, Datascope::Company) then
             exit;
 
         IsolatedStorage.Delete(KeyId, Datascope::Company);
@@ -294,4 +252,3 @@ table 1853 "MS - Sales Forecast Setup"
         end;
     end;
 }
-

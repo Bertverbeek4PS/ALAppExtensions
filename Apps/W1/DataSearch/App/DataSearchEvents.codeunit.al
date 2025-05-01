@@ -81,10 +81,10 @@ codeunit 2682 "Data Search Events"
     end;
 
     /// <summary>
-    /// Enables adding and removing tables from the default initial setup for tables to search.
+    /// Enables adding and removing fields from the default initial setup for fields for the specified table.
     /// </summary>
     /// <param name="TableNo">The table no. of the table that is being set up.</param>
-    /// <param name="ListOfFieldNumbers">List of integer. You can specifify additional fields for a table here or remove unwanted.</param>
+    /// <param name="ListOfFieldNumbers">List of integer. You can specify additional fields for a table here or remove unwanted.</param>
     [IntegrationEvent(false, false)]
     procedure OnAfterGetFieldListForTable(TableNo: Integer; var ListOfFieldNumbers: List of [Integer])
     begin
@@ -118,6 +118,20 @@ codeunit 2682 "Data Search Events"
     /// <param name="RecordRef">The record on which the search is being conducted.</param>
     [IntegrationEvent(false, false)]
     procedure OnBeforeSearchTable(var RecordRef: RecordRef)
+    begin
+    end;
+
+    /// <summary>
+    /// Allows the different implementation of the SerachTable procedure.
+    /// </summary>
+    /// <param name="TableNo">The table no. of the table that is being displayed.</param>
+    /// <param name="TableType">If the table as a 'Document Type'-like field, this value specifies the type as integer.</param>
+    /// <param name="FieldList">List of integer. You can specifify additional fields for a table here or remove unwanted.</param>
+    /// <param name="SearchStrings">List of Text. </param>
+    /// <param name="Results">Dictionary of Text/Text values.</param>
+    /// <param name="IsHandled">Defines should system stop processing code in the procedure SearchTable.</param>
+    [IntegrationEvent(false, false)]
+    internal procedure OnBeforeSearchTableProcedure(TableNo: Integer; TableType: Integer; var FieldList: List of [Integer]; var SearchStrings: List of [Text]; var Results: Dictionary of [Text, Text]; var IsHandled: Boolean)
     begin
     end;
 }

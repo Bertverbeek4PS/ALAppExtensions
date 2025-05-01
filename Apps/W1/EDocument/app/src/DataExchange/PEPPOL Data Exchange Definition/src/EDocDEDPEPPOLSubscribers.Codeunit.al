@@ -13,6 +13,7 @@ using Microsoft.Sales.Document;
 using Microsoft.Sales.History;
 using Microsoft.Sales.Peppol;
 using Microsoft.Service.History;
+using Microsoft.Foundation.Attachment;
 using System.IO;
 using System.Utilities;
 
@@ -33,18 +34,19 @@ codeunit 6162 "E-Doc. DED PEPPOL Subscribers"
         AllowanceChargeLoopNumber := 1;
         DataExchEntryNo := DataExchEntryNo2;
         ProcessedDocType := ProcessedDocType2;
+        DocumentAttachmentNumber := 1;
     end;
 
-    procedure IsRoundingLine(SalesLine: Record "Sales Line"): Boolean;
+    procedure IsRoundingLine(SalesLine2: Record "Sales Line"): Boolean;
     var
         Customer: Record Customer;
         CustomerPostingGroup: Record "Customer Posting Group";
     begin
-        if SalesLine.Type = SalesLine.Type::"G/L Account" then begin
-            Customer.Get(SalesLine."Bill-to Customer No.");
+        if SalesLine2.Type = SalesLine2.Type::"G/L Account" then begin
+            Customer.Get(SalesLine2."Bill-to Customer No.");
             CustomerPostingGroup.SetFilter(Code, Customer."Customer Posting Group");
             if CustomerPostingGroup.FindFirst() then
-                if SalesLine."No." = CustomerPostingGroup."Invoice Rounding Account" then
+                if SalesLine2."No." = CustomerPostingGroup."Invoice Rounding Account" then
                     exit(true);
         end;
         exit(false);
@@ -271,6 +273,7 @@ codeunit 6162 "E-Doc. DED PEPPOL Subscribers"
                             NetworkID);
 
                         PEPPOLMgt.GetPaymentMeansPayeeFinancialAccBIS(
+                            SalesHeader,
                             PayeeFinancialAccountID,
                             FinancialInstitutionBranchID);
                     end;
@@ -499,6 +502,32 @@ codeunit 6162 "E-Doc. DED PEPPOL Subscribers"
                 '/cac:InvoiceLine/cac:Price/cbc:BaseQuantity',
                 '/cac:CreditNoteLine/cac:Price/cbc:BaseQuantity':
                     xmlNodeValue := BaseQuantity;
+                '/cac:AdditionalDocumentReference':
+                    begin
+                        if ProcessedDocType = ProcessedDocType::"Sales Invoice" then
+                            ProcessedDocTypeInt := 0
+                        else
+                            ProcessedDocTypeInt := 1;
+
+                        PEPPOLMgt.GetAdditionalDocRefInfo(
+                            DocumentAttachmentNumber,
+                            DocumentAttachment,
+                            SalesHeader,
+                            AdditionalDocumentReferenceID,
+                            AdditionalDocRefDocumentType,
+                            URI,
+                            filename,
+                            mimeCode,
+                            EmbeddedDocumentBinaryObject,
+                            ProcessedDocTypeInt
+                        );
+
+                        DocumentAttachmentNumber += 1;
+                    end;
+                '/cac:AdditionalDocumentReference/cbc:ID':
+                    xmlNodeValue := AdditionalDocumentReferenceID;
+                '/cac:AdditionalDocumentReference/cac:Attachment/cbc:EmbeddedDocumentBinaryObject':
+                    xmlNodeValue := EmbeddedDocumentBinaryObject;
             end;
     end;
 
@@ -574,6 +603,10 @@ codeunit 6162 "E-Doc. DED PEPPOL Subscribers"
                 '/cac:InvoiceLine/cac:Price/cbc:BaseQuantity[@unitCode]',
                 '/cac:CreditNoteLine/cac:Price/cbc:BaseQuantity[@unitCode]':
                     xmlAttributeValue := UnitCodeBaseQty;
+                '/cac:AdditionalDocumentReference/cac:Attachment/cbc:EmbeddedDocumentBinaryObject[@filename]':
+                    xmlAttributeValue := Filename;
+                '/cac:AdditionalDocumentReference/cac:Attachment/cbc:EmbeddedDocumentBinaryObject[@mimeCode]':
+                    xmlAttributeValue := MimeCode;
             end;
     end;
 
@@ -602,6 +635,9 @@ codeunit 6162 "E-Doc. DED PEPPOL Subscribers"
                                 PEPPOLMgt.GetTaxCategories(SalesLine, TempVATProductPostingGroup);
                             end;
                         until SalesInvoiceLine.Next() = 0;
+
+                    DocumentAttachment.SetRange("No.", SalesInvoiceHeader."No.");
+                    DocumentAttachment.SetRange("Table ID", Database::"Sales Invoice Header");
                 end;
 
             ProcessedDocType::"Service Invoice":
@@ -614,7 +650,7 @@ codeunit 6162 "E-Doc. DED PEPPOL Subscribers"
                     if ServiceInvoiceLine.FindSet() then
                         repeat
                             PEPPOLMgt.TransferLineToSalesLine(ServiceInvoiceLine, SalesLine);
-                            SalesLine.Type := PEPPOLMgt.MapServiceLineTypeToSalesLineTypeEnum(ServiceInvoiceLine.Type);
+                            SalesLine.Type := ServPEPPOLMgt.MapServiceLineTypeToSalesLineType(ServiceInvoiceLine.Type);
                             if IsRoundingLine(SalesLine) then begin
                                 TempSalesLineRounding.TransferFields(SalesLine);
                                 TempSalesLineRounding.Insert();
@@ -623,6 +659,9 @@ codeunit 6162 "E-Doc. DED PEPPOL Subscribers"
                                 PEPPOLMgt.GetTaxCategories(SalesLine, TempVATProductPostingGroup);
                             end;
                         until ServiceInvoiceLine.Next() = 0;
+
+                    DocumentAttachment.SetRange("No.", ServiceInvoiceHeader."No.");
+                    DocumentAttachment.SetRange("Table ID", Database::"Service Invoice Header");
                 end;
 
             ProcessedDocType::"Sales Credit Memo":
@@ -643,6 +682,9 @@ codeunit 6162 "E-Doc. DED PEPPOL Subscribers"
                                 PEPPOLMgt.GetTaxCategories(SalesLine, TempVATProductPostingGroup);
                             end;
                         until SalesCrMemoLine.Next() = 0;
+
+                    DocumentAttachment.SetRange("No.", SalesCrMemoHeader."No.");
+                    DocumentAttachment.SetRange("Table ID", Database::"Sales Cr.Memo Header");
                 end;
 
             ProcessedDocType::"Service Credit Memo":
@@ -655,7 +697,7 @@ codeunit 6162 "E-Doc. DED PEPPOL Subscribers"
                     if ServiceCrMemoLine.FindSet() then
                         repeat
                             PEPPOLMgt.TransferLineToSalesLine(ServiceCrMemoLine, SalesLine);
-                            SalesLine.Type := PEPPOLMgt.MapServiceLineTypeToSalesLineTypeEnum(ServiceCrMemoLine.Type);
+                            SalesLine.Type := ServPEPPOLMgt.MapServiceLineTypeToSalesLineType(ServiceCrMemoLine.Type);
                             if IsRoundingLine(SalesLine) then begin
                                 TempSalesLineRounding.TransferFields(SalesLine);
                                 TempSalesLineRounding.Insert();
@@ -664,6 +706,9 @@ codeunit 6162 "E-Doc. DED PEPPOL Subscribers"
                                 PEPPOLMgt.GetTaxCategories(SalesLine, TempVATProductPostingGroup);
                             end;
                         until ServiceCrMemoLine.Next() = 0;
+
+                    DocumentAttachment.SetRange("No.", ServiceCrMemoHeader."No.");
+                    DocumentAttachment.SetRange("Table ID", Database::"Service Cr.Memo Header");
                 end;
         end;
 
@@ -693,7 +738,7 @@ codeunit 6162 "E-Doc. DED PEPPOL Subscribers"
                     ServiceInvoiceLine.FindFirst();
 
                     PEPPOLMgt.TransferLineToSalesLine(ServiceInvoiceLine, SalesLine);
-                    SalesLine.Type := PEPPOLMgt.MapServiceLineTypeToSalesLineTypeEnum(ServiceInvoiceLine.Type);
+                    SalesLine.Type := ServPEPPOLMgt.MapServiceLineTypeToSalesLineType(ServiceInvoiceLine.Type);
                 end;
             ProcessedDocType::"Sales Credit Memo":
                 begin
@@ -709,103 +754,86 @@ codeunit 6162 "E-Doc. DED PEPPOL Subscribers"
                     ServiceCrMemoLine.FindFirst();
 
                     PEPPOLMgt.TransferLineToSalesLine(ServiceCrMemoLine, SalesLine);
-                    SalesLine.Type := PEPPOLMgt.MapServiceLineTypeToSalesLineTypeEnum(ServiceCrMemoLine.Type);
+                    SalesLine.Type := ServPEPPOLMgt.MapServiceLineTypeToSalesLineType(ServiceCrMemoLine.Type);
                 end;
+        end;
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"E-Document Service", 'OnAfterValidateEvent', 'Document Format', false, false)]
+    local procedure OnAfterValidateDocumentFormat(var Rec: Record "E-Document Service"; var xRec: Record "E-Document Service"; CurrFieldNo: Integer)
+    var
+        EDocServiceSupportedType: Record "E-Doc. Service Supported Type";
+    begin
+        if Rec."Document Format" = Rec."Document Format"::"Data Exchange" then begin
+            EDocServiceSupportedType.SetRange("E-Document Service Code", Rec.Code);
+            if EDocServiceSupportedType.IsEmpty() then begin
+                EDocServiceSupportedType.Init();
+                EDocServiceSupportedType."E-Document Service Code" := Rec.Code;
+                EDocServiceSupportedType."Source Document Type" := EDocServiceSupportedType."Source Document Type"::"Sales Invoice";
+                EDocServiceSupportedType.Insert();
+
+                EDocServiceSupportedType."Source Document Type" := EDocServiceSupportedType."Source Document Type"::"Sales Credit Memo";
+                EDocServiceSupportedType.Insert();
+
+                EDocServiceSupportedType."Source Document Type" := EDocServiceSupportedType."Source Document Type"::"Service Invoice";
+                EDocServiceSupportedType.Insert();
+
+                EDocServiceSupportedType."Source Document Type" := EDocServiceSupportedType."Source Document Type"::"Service Credit Memo";
+                EDocServiceSupportedType.Insert();
+            end;
         end;
     end;
 
     var
         SalesInvoiceHeader: Record "Sales Invoice Header";
-        SalesInvoiceLine:
-                Record "Sales Invoice Line";
-        SalesCrMemoHeader:
-                Record "Sales Cr.Memo Header";
-        SalesCrMemoLine:
-                Record "Sales Cr.Memo Line";
-        ServiceInvoiceHeader:
-                Record "Service Invoice Header";
-        ServiceInvoiceLine:
-                Record "Service Invoice Line";
-        ServiceCrMemoHeader:
-                Record "Service Cr.Memo Header";
-        ServiceCrMemoLine:
-                Record "Service Cr.Memo Line";
-        SalesHeader:
-                Record "Sales Header";
-        SalesLine:
-                Record "Sales Line";
-        TempVATAmtLine:
-                Record "VAT Amount Line" temporary;
-        TempSalesLineRounding:
-                Record "Sales Line" temporary;
-        TempVATProductPostingGroup:
-                Record "VAT Product Posting Group" temporary;
-        PEPPOLMgt:
-                Codeunit "PEPPOL Management";
-        ProcessedDocType:
-                Enum "E-Document Type";
-        TaxAmountLCY, TaxCurrencyCodeLCY, TaxTotalCurrencyIDLCY :
-                Text;
-        SupplierEndpointID, SupplierSchemeID, SupplierName :
-                Text;
-        StreetName, AdditionalStreetName, CityName, PostalZone, CountrySubentity, IdentificationCode, DummyVar :
-                Text;
-        CompanyID, CompanyIDSchemeID, TaxSchemeID :
-                Text;
-        CustPartyTaxSchemeCompanyID, CustPartyTaxSchemeCompIDSchID, CustTaxSchemeID :
-                Text;
-        PartyLegalEntityRegName, PartyLegalEntityCompanyID, PartyLegalEntitySchemeID, SupplierRegAddrCityName, SupplierRegAddrCountryIdCode, SupplRegAddrCountryIdListId :
-                Text;
-        CustPartyLegalEntityRegName, CustPartyLegalEntityCompanyID, CustPartyLegalEntityIDSchemeID :
-                Text;
-        CustomerEndpointID, CustomerSchemeID, CustomerPartyIdentificationID, CustomerPartyIDSchemeID, CustomerName :
-                Text;
-        ContactName, Telephone, Telefax, ElectronicMail :
-                Text;
-        CustContactName, CustContactTelephone, CustContactTelefax, CustContactElectronicMail :
-                Text;
-        TaxRepPartyNameName, PayeePartyTaxSchemeCompanyID, PayeePartyTaxSchCompIDSchemeID, PayeePartyTaxSchemeTaxSchemeID :
-                Text;
-        PaymentMeansCode, PaymentChannelCode, PaymentID, PrimaryAccountNumberID, NetworkID, PayeeFinancialAccountID, FinancialInstitutionBranchID :
-                Text;
-        ActualDeliveryDate, DeliveryID, DeliveryIDSchemeID :
-                Text;
-        PaymentTermsNote:
-                Text;
-        ChargeIndicator, AllowanceChargeReasonCode, AllowanceChargeReason, Amount, AllowanceChargeCurrencyID, TaxCategoryID, Percent, AllowanceChargeTaxSchemeID :
-                Text;
-        TaxAmount, TaxTotalCurrencyID :
-                Text;
-        TaxableAmount, TaxAmountCurrencyID, SubtotalTaxAmount, TaxSubtotalCurrencyID, TransactionCurrencyTaxAmount, TransCurrTaxAmtCurrencyID, TaxTotalTaxCategoryID, TaxCategoryPercent, TaxTotalTaxSchemeID, TaxExemptionReason :
-                Text;
-        LineExtensionAmount, LegalMonetaryTotalCurrencyID, TaxExclusiveAmount, TaxExclusiveAmountCurrencyID, TaxInclusiveAmount, TaxInclusiveAmountCurrencyID, AllowanceTotalAmount, AllowanceTotalAmountCurrencyID, ChargeTotalAmount, ChargeTotalAmountCurrencyID, PrepaidAmount, PrepaidCurrencyID, PayableRoundingAmount, PayableRndingAmountCurrencyID, PayableAmount, PayableAmountCurrencyID :
-                Text;
-        DocCurrencyCode:
-                Text;
-        LnAllowanceChargeIndicator, LnAllowanceChargeReason, LnAllowanceChargeAmount, LnAllowanceChargeAmtCurrID :
-                Text;
-        Description, Name, SellersItemIdentificationID, StandardItemIdentificationID, StdItemIdIDSchemeID, OriginCountryIdCode, OriginCountryIdCodeListID :
-                Text;
-        ClassifiedTaxCategoryID, InvoiceLineTaxPercent, ClassifiedTaxCategorySchemeID, AdditionalItemPropertyName, AdditionalItemPropertyValue :
-                Text;
-        InvoiceLinePriceAmount, InvLinePriceAmountCurrencyID, BaseQuantity, UnitCodeBaseQty :
-                Text;
-        InvoiceDocRefID, InvoiceDocRefIssueDate :
-                Text;
-        DataExchEntryNo:
-                Integer;
-        TaxSubtotalLoopNumber, AllowanceChargeLoopNumber :
-                Integer;
-        CacNamespaceURILbl:
-                Label 'urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2', Locked = true;
-        CbcNamespaceURILbl:
-                Label 'urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2', Locked = true;
-        CctsNamespaceURILbl:
-                Label 'urn:un:unece:uncefact:documentation:2', Locked = true;
-        QdtNamespaceURILbl:
-                Label 'urn:oasis:names:specification:ubl:schema:xsd:QualifiedDatatypes-2', Locked = true;
-        UdtNamespaceURILbl:
-                Label 'urn:un:unece:uncefact:data:specification:UnqualifiedDataTypesSchemaModule:2', Locked = true;
-        UoMforPieceINUNECERec20ListIDTxt:
-                Label 'EA', Locked = true;
+        SalesInvoiceLine: Record "Sales Invoice Line";
+        SalesCrMemoHeader: Record "Sales Cr.Memo Header";
+        SalesCrMemoLine: Record "Sales Cr.Memo Line";
+        ServiceInvoiceHeader: Record "Service Invoice Header";
+        ServiceInvoiceLine: Record "Service Invoice Line";
+        ServiceCrMemoHeader: Record "Service Cr.Memo Header";
+        ServiceCrMemoLine: Record "Service Cr.Memo Line";
+        SalesHeader: Record "Sales Header";
+        SalesLine: Record "Sales Line";
+        DocumentAttachment: Record "Document Attachment";
+        TempVATAmtLine: Record "VAT Amount Line" temporary;
+        TempSalesLineRounding: Record "Sales Line" temporary;
+        TempVATProductPostingGroup: Record "VAT Product Posting Group" temporary;
+        PEPPOLMgt: Codeunit "PEPPOL Management";
+        ServPEPPOLMgt: Codeunit "Serv. PEPPOL Management";
+        ProcessedDocType: Enum "E-Document Type";
+        DocumentAttachmentNumber, ProcessedDocTypeInt : Integer;
+        AdditionalDocumentReferenceID, AdditionalDocRefDocumentType, URI, Filename, MimeCode, EmbeddedDocumentBinaryObject : Text;
+        TaxAmountLCY, TaxCurrencyCodeLCY, TaxTotalCurrencyIDLCY : Text;
+        SupplierEndpointID, SupplierSchemeID, SupplierName : Text;
+        StreetName, AdditionalStreetName, CityName, PostalZone, CountrySubentity, IdentificationCode, DummyVar : Text;
+        CompanyID, CompanyIDSchemeID, TaxSchemeID : Text;
+        CustPartyTaxSchemeCompanyID, CustPartyTaxSchemeCompIDSchID, CustTaxSchemeID : Text;
+        PartyLegalEntityRegName, PartyLegalEntityCompanyID, PartyLegalEntitySchemeID, SupplierRegAddrCityName, SupplierRegAddrCountryIdCode, SupplRegAddrCountryIdListId : Text;
+        CustPartyLegalEntityRegName, CustPartyLegalEntityCompanyID, CustPartyLegalEntityIDSchemeID : Text;
+        CustomerEndpointID, CustomerSchemeID, CustomerPartyIdentificationID, CustomerPartyIDSchemeID, CustomerName : Text;
+        ContactName, Telephone, Telefax, ElectronicMail : Text;
+        CustContactName, CustContactTelephone, CustContactTelefax, CustContactElectronicMail : Text;
+        TaxRepPartyNameName, PayeePartyTaxSchemeCompanyID, PayeePartyTaxSchCompIDSchemeID, PayeePartyTaxSchemeTaxSchemeID : Text;
+        PaymentMeansCode, PaymentChannelCode, PaymentID, PrimaryAccountNumberID, NetworkID, PayeeFinancialAccountID, FinancialInstitutionBranchID : Text;
+        ActualDeliveryDate, DeliveryID, DeliveryIDSchemeID : Text;
+        PaymentTermsNote: Text;
+        ChargeIndicator, AllowanceChargeReasonCode, AllowanceChargeReason, Amount, AllowanceChargeCurrencyID, TaxCategoryID, Percent, AllowanceChargeTaxSchemeID : Text;
+        TaxAmount, TaxTotalCurrencyID : Text;
+        TaxableAmount, TaxAmountCurrencyID, SubtotalTaxAmount, TaxSubtotalCurrencyID, TransactionCurrencyTaxAmount, TransCurrTaxAmtCurrencyID, TaxTotalTaxCategoryID, TaxCategoryPercent, TaxTotalTaxSchemeID, TaxExemptionReason : Text;
+        LineExtensionAmount, LegalMonetaryTotalCurrencyID, TaxExclusiveAmount, TaxExclusiveAmountCurrencyID, TaxInclusiveAmount, TaxInclusiveAmountCurrencyID, AllowanceTotalAmount, AllowanceTotalAmountCurrencyID, ChargeTotalAmount, ChargeTotalAmountCurrencyID, PrepaidAmount, PrepaidCurrencyID, PayableRoundingAmount, PayableRndingAmountCurrencyID, PayableAmount, PayableAmountCurrencyID : Text;
+        DocCurrencyCode: Text;
+        LnAllowanceChargeIndicator, LnAllowanceChargeReason, LnAllowanceChargeAmount, LnAllowanceChargeAmtCurrID : Text;
+        Description, Name, SellersItemIdentificationID, StandardItemIdentificationID, StdItemIdIDSchemeID, OriginCountryIdCode, OriginCountryIdCodeListID : Text;
+        ClassifiedTaxCategoryID, InvoiceLineTaxPercent, ClassifiedTaxCategorySchemeID, AdditionalItemPropertyName, AdditionalItemPropertyValue : Text;
+        InvoiceLinePriceAmount, InvLinePriceAmountCurrencyID, BaseQuantity, UnitCodeBaseQty : Text;
+        InvoiceDocRefID, InvoiceDocRefIssueDate : Text;
+        DataExchEntryNo: Integer;
+        TaxSubtotalLoopNumber, AllowanceChargeLoopNumber : Integer;
+        CacNamespaceURILbl: Label 'urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2', Locked = true;
+        CbcNamespaceURILbl: Label 'urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2', Locked = true;
+        CctsNamespaceURILbl: Label 'urn:un:unece:uncefact:documentation:2', Locked = true;
+        QdtNamespaceURILbl: Label 'urn:oasis:names:specification:ubl:schema:xsd:QualifiedDatatypes-2', Locked = true;
+        UdtNamespaceURILbl: Label 'urn:un:unece:uncefact:data:specification:UnqualifiedDataTypesSchemaModule:2', Locked = true;
+        UoMforPieceINUNECERec20ListIDTxt: Label 'EA', Locked = true;
 }

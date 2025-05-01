@@ -1,4 +1,5 @@
-﻿permissionset 11792 "CZ Bank Documents - Obj. CZB"
+#pragma warning disable AA0247
+permissionset 11792 "CZ Bank Documents - Obj. CZB"
 {
     Access = Public;
     Assignable = false;
@@ -27,7 +28,9 @@
                   Codeunit "Issue Bank Statement CZB" = X,
                   Codeunit "Issue Bank Statement Print CZB" = X,
                   Codeunit "Issue Bank Statement YesNo CZB" = X,
+                  Codeunit "IssueBank.Stat.Create Jnl. CZB" = X,
                   Codeunit "Issue Payment Order CZB" = X,
+                  Codeunit "Issue Payment Order Export CZB" = X,
                   Codeunit "Issue Payment Order Print CZB" = X,
                   Codeunit "Issue Payment Order YesNo CZB" = X,
                   Codeunit "Match Bank Payment CZB" = X,

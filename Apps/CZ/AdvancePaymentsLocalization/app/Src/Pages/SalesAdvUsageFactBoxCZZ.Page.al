@@ -1,4 +1,5 @@
-﻿// ------------------------------------------------------------------------------------------------
+﻿#if not CLEAN25
+// ------------------------------------------------------------------------------------------------
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License. See License.txt in the project root for license information.
 // ------------------------------------------------------------------------------------------------
@@ -13,6 +14,9 @@ page 31187 "Sales Adv. Usage FactBox CZZ"
     Caption = 'Sales Advance Usage';
     PageType = CardPart;
     SourceTable = "Sales Line";
+    ObsoleteState = Pending;
+    ObsoleteReason = 'This page will be removed in a future release. Use the "Advance Usage FactBox CZZ" page instead.';
+    ObsoleteTag = '25.0';
 
     layout
     {
@@ -29,18 +33,10 @@ page 31187 "Sales Adv. Usage FactBox CZZ"
                 var
                     SalesAdvLetterManagement: Codeunit "SalesAdvLetterManagement CZZ";
                 begin
-                    case Rec."Document Type" of
-                        Rec."Document Type"::Order:
-                            begin
-                                SalesAdvLetterManagement.LinkAdvanceLetter("Adv. Letter Usage Doc.Type CZZ"::"Sales Order", SalesHeader."No.", SalesHeader."Bill-to Customer No.", SalesHeader."Posting Date", SalesHeader."Currency Code");
-                                CurrPage.Update();
-                            end;
-                        Rec."Document Type"::Invoice:
-                            begin
-                                SalesAdvLetterManagement.LinkAdvanceLetter("Adv. Letter Usage Doc.Type CZZ"::"Sales Invoice", SalesHeader."No.", SalesHeader."Bill-to Customer No.", SalesHeader."Posting Date", SalesHeader."Currency Code");
-                                CurrPage.Update();
-                            end;
-                    end;
+                    SalesAdvLetterManagement.LinkAdvanceLetter(
+                        SalesHeader.GetAdvLetterUsageDocTypeCZZ(), SalesHeader."No.", SalesHeader."Bill-to Customer No.",
+                        SalesHeader."Posting Date", SalesHeader."Currency Code");
+                    CurrPage.Update();
                 end;
             }
             field(AdvanceAmountToUse; AdvanceAmountToUse)
@@ -125,11 +121,8 @@ page 31187 "Sales Adv. Usage FactBox CZZ"
         end;
 
         SalesHeader.Get(Rec."Document Type", Rec."Document No.");
-
-        if SalesHeader."Document Type" = SalesHeader."Document Type"::Order then
-            AdvanceLetterApplication.GetAssignedAdvance("Adv. Letter Usage Doc.Type CZZ"::"Sales Order", SalesHeader."No.", TempAdvanceLetterApplication)
-        else
-            AdvanceLetterApplication.GetAssignedAdvance("Adv. Letter Usage Doc.Type CZZ"::"Sales Invoice", SalesHeader."No.", TempAdvanceLetterApplication);
+        AdvanceLetterApplication.GetAssignedAdvance(
+            SalesHeader.GetAdvLetterUsageDocTypeCZZ(), SalesHeader."No.", TempAdvanceLetterApplication);
 
         CurrFactor := SalesHeader."Currency Factor";
         if CurrFactor = 0 then
@@ -166,3 +159,4 @@ page 31187 "Sales Adv. Usage FactBox CZZ"
     begin
     end;
 }
+#endif

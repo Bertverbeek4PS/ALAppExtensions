@@ -98,7 +98,6 @@ tableextension 11718 "G/L Account CZL" extends "G/L Account"
                                                                               "Global Dimension 1 Code" = field("Global Dimension 1 Filter"),
                                                                               "Global Dimension 2 Code" = field("Global Dimension 2 Filter"),
                                                                               "VAT Reporting Date" = field("Date Filter")));
-
             AutoFormatExpression = GetCurrencyCode();
             AutoFormatType = 1;
         }

@@ -5,6 +5,7 @@
 namespace Microsoft.Finance.AdvancePayments;
 
 using Microsoft.Finance.CashDesk;
+using Microsoft.Finance.GeneralLedger.Journal;
 using Microsoft.Finance.GeneralLedger.Posting;
 using Microsoft.Purchases.Document;
 using Microsoft.Purchases.History;
@@ -18,13 +19,10 @@ codeunit 31022 "Purch.-Post Handler CZZ"
     var
         PurchAdvLetterManagement: Codeunit "PurchAdvLetterManagement CZZ";
     begin
-        if (not PurchaseHeader.Invoice) or (not (PurchaseHeader."Document Type" in [PurchaseHeader."Document Type"::Order, PurchaseHeader."Document Type"::Invoice])) then
+        if (not PurchaseHeader.Invoice) or (not PurchaseHeader.IsAdvanceLetterDocTypeCZZ()) then
             exit;
 
-        if PurchaseHeader."Document Type" = PurchaseHeader."Document Type"::Order then
-            PurchAdvLetterManagement.CheckAdvancePayment("Adv. Letter Usage Doc.Type CZZ"::"Purchase Order", PurchaseHeader)
-        else
-            PurchAdvLetterManagement.CheckAdvancePayment("Adv. Letter Usage Doc.Type CZZ"::"Purchase Invoice", PurchaseHeader);
+        PurchAdvLetterManagement.CheckAdvancePayment(PurchaseHeader.GetAdvLetterUsageDocTypeCZZ(), PurchaseHeader)
     end;
 
     [EventSubscriber(ObjectType::Codeunit, Codeunit::"Purchase Handler CZP", 'OnBeforeCreateCashDocument', '', false, false)]
@@ -42,13 +40,14 @@ codeunit 31022 "Purch.-Post Handler CZZ"
         PurchAdvLetterManagementCZZ: Codeunit "PurchAdvLetterManagement CZZ";
         AdvLetterUsageDocTypeCZZ: Enum "Adv. Letter Usage Doc.Type CZZ";
     begin
-        if (not PurchHeader.Invoice) or (not (PurchHeader."Document Type" in [PurchHeader."Document Type"::Order, PurchHeader."Document Type"::Invoice])) then
+        if (not PurchHeader.Invoice) or (not PurchHeader.IsAdvanceLetterDocTypeCZZ()) then
             exit;
 
-        if PurchHeader."Document Type" = PurchHeader."Document Type"::Order then
-            AdvLetterUsageDocTypeCZZ := AdvLetterUsageDocTypeCZZ::"Purchase Order"
-        else
-            AdvLetterUsageDocTypeCZZ := AdvLetterUsageDocTypeCZZ::"Purchase Invoice";
+        PurchInvHeader.CalcFields("Remaining Amount");
+        if PurchInvHeader."Remaining Amount" = 0 then
+            exit;
+
+        AdvLetterUsageDocTypeCZZ := PurchHeader.GetAdvLetterUsageDocTypeCZZ();
 
         VendorLedgerEntry.Get(PurchInvHeader."Vendor Ledger Entry No.");
         BindSubscription(GetLastGLEntryNoCZZ);
@@ -61,6 +60,8 @@ codeunit 31022 "Purch.-Post Handler CZZ"
             AdvanceLetterApplicationCZZ.SetRange("Document No.", PurchHeader."No.");
             AdvanceLetterApplicationCZZ.DeleteAll(true);
         end;
+
+        OnAfterPurchPostOnAfterFinalizePostingOnBeforeCommit(PurchHeader, PurchInvHeader, GenJnlPostLine);
     end;
 
     [EventSubscriber(ObjectType::Codeunit, Codeunit::"Purch.-Post", 'OnBeforeCreatePrepmtLines', '', false, false)]
@@ -73,5 +74,19 @@ codeunit 31022 "Purch.-Post Handler CZZ"
     local procedure DisableCheckOnBeforeTestStatusRelease(var IsHandled: Boolean)
     begin
         IsHandled := true;
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Purch. Post Invoice Events", 'OnPostLedgerEntryOnBeforeGenJnlPostLine', '', false, false)]
+    local procedure DisableApplicationOnPostLedgerEntryOnBeforeGenJnlPostLine(var GenJnlLine: Record "Gen. Journal Line"; var PurchHeader: Record "Purchase Header")
+    begin
+        if (not PurchHeader.Invoice) or (not PurchHeader.IsAdvanceLetterDocTypeCZZ()) then
+            exit;
+        if PurchHeader.HasAdvanceLetterLinkedCZZ() then
+            GenJnlLine."Allow Application" := false;
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnAfterPurchPostOnAfterFinalizePostingOnBeforeCommit(var PurchHeader: Record "Purchase Header"; var PurchInvHeader: Record "Purch. Inv. Header"; var GenJnlPostLine: Codeunit "Gen. Jnl.-Post Line")
+    begin
     end;
 }

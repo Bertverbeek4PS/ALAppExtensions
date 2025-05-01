@@ -1,4 +1,4 @@
-﻿// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License. See License.txt in the project root for license information.
 // ------------------------------------------------------------------------------------------------
@@ -267,16 +267,16 @@ table 18474 "Sub. Comp. Rcpt. Header"
     }
 
     trigger OnInsert()
+    var
+        NoSeries: Codeunit "No. Series";
     begin
-        "Purch&payableSetup".Get();
+        PurchasesPayablesSetup.Get();
         if "No." = '' then begin
-            "Purch&payableSetup".TestField("Posted SC Comp. Rcpt. Nos.");
-            NoSeriesMgt.InitSeries(
-                "Purch&payableSetup"."Posted SC Comp. Rcpt. Nos.",
-                xRec."No. Series",
-                "Posting Date",
-                "No.",
-                "No. Series");
+            PurchasesPayablesSetup.TestField("Posted SC Comp. Rcpt. Nos.");
+                "No. Series" := PurchasesPayablesSetup."Posted SC Comp. Rcpt. Nos.";
+                if NoSeries.AreRelated("No. Series", xRec."No. Series") then
+                    "No. Series" := xRec."No. Series";
+                "No." := NoSeries.GetNextNo("No. Series", "Posting Date");
         end;
     end;
 
@@ -297,7 +297,6 @@ table 18474 "Sub. Comp. Rcpt. Header"
 
     var
         PostCode: Record "Post Code";
-        "Purch&payableSetup": Record "Purchases & Payables Setup";
+        PurchasesPayablesSetup: Record "Purchases & Payables Setup";
         DimMgt: Codeunit DimensionManagement;
-        NoSeriesMgt: Codeunit NoSeriesManagement;
 }

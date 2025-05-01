@@ -413,6 +413,7 @@ codeunit 11502 "Swiss QR-Bill Purchases"
             if not Confirm(PurchDocAlreadyQRImportedQst) then
                 exit;
 
+        OnBeforeQRBillImportDecodeToPurchase(PurchaseHeader);
         if SwissQRBillIncomingDoc.QRBillImportDecodeToPurchase(TempIncomingDocument, FromFile) then
             ImportToPurchaseDoc(PurchaseHeader, TempIncomingDocument);
     end;
@@ -423,6 +424,7 @@ codeunit 11502 "Swiss QR-Bill Purchases"
         GenJournalTemplate: Record "Gen. Journal Template";
         GenJournalBatch: Record "Gen. Journal Batch";
         NewGenJournalLine: Record "Gen. Journal Line";
+        NoSeriesBatch: Codeunit "No. Series - Batch";
         LastLineNo: Integer;
         Finish: Boolean;
         MessageResult: Text;
@@ -442,7 +444,7 @@ codeunit 11502 "Swiss QR-Bill Purchases"
                     LastLineNo += 10000;
                     NewGenJournalLine."Line No." := LastLineNo;
                     NewGenJournalLine.Insert();
-                    NewGenJournalLine.IncrementDocumentNo(GenJournalBatch, NewDocumentNo);
+                    NewDocumentNo := NoSeriesBatch.SimulateGetNextNo(GenJournalBatch."No. Series", NewGenJournalLine."Posting Date", NewDocumentNo);
                     Commit();
                     finish := not Confirm(MessageResult)
                 end else
@@ -454,7 +456,7 @@ codeunit 11502 "Swiss QR-Bill Purchases"
 
     local procedure PreparePurchaseJournalLine(var GenJournalLine: Record "Gen. Journal Line"; var GenJournalTemplate: Record "Gen. Journal Template"; var GenJournalBatch: Record "Gen. Journal Batch"; var LastLineNo: Integer; var NewDocumentNo: Code[20])
     var
-        NoSeriesManagement: Codeunit NoSeriesManagement;
+        NoSeriesBatch: Codeunit "No. Series - Batch";
     begin
         with GenJournalLine do begin
             GenJournalTemplate.Get("Journal Template Name");
@@ -466,9 +468,9 @@ codeunit 11502 "Swiss QR-Bill Purchases"
                 NewDocumentNo := "Document No.";
             end;
             if NewDocumentNo = '' then
-                NewDocumentNo := NoSeriesManagement.TryGetNextNo(GenJournalBatch."No. Series", WorkDate())
+                NewDocumentNo := NoSeriesBatch.PeekNextNo(GenJournalBatch."No. Series", WorkDate())
             else
-                IncrementDocumentNo(GenJournalBatch, NewDocumentNo);
+                NewDocumentNo := NoSeriesBatch.SimulateGetNextNo(GenJournalBatch."No. Series", GenJournalLine."Posting Date", NewDocumentNo)
         end;
     end;
 
@@ -531,13 +533,14 @@ codeunit 11502 "Swiss QR-Bill Purchases"
                 PurchaseHeader.TestField("Pay-to Vendor No.");
                 if Confirm(StrSubstNo(PurhDocVendBankAccountQst, IncomingDocument."Vendor IBAN")) then begin
                     VendorBankAccount."Vendor No." := PurchaseHeader."Pay-to Vendor No.";
-                    VendorBankAccount.IBAN := IncomingDocument."Vendor IBAN";
                     VendorBankAccount."Payment Form" := VendorBankAccount."Payment Form"::"Bank Payment Domestic";
+                    VendorBankAccount.Validate(IBAN, IncomingDocument."Vendor IBAN");
                     SwissQRBillCreateVendBank.LookupMode(true);
                     SwissQRBillCreateVendBank.SetDetails(VendorBankAccount);
                     if SwissQRBillCreateVendBank.RunModal() = Action::LookupOK then begin
                         SwissQRBillCreateVendBank.GetDetails(VendorBankAccount);
                         VendorBankAccount.Insert(true);
+                        IncomingDocument."Vendor Bank Account No." := VendorBankAccount.Code;
                         SwissQRBillIncomingDoc.UpdatePurchDocFromIncDoc(PurchaseHeader, IncomingDocument);
                         MessageResult := ImportSuccessMsg;
                     end else
@@ -549,35 +552,6 @@ codeunit 11502 "Swiss QR-Bill Purchases"
 
         Message(MessageResult)
     end;
-
-#if not CLEAN23
-    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Purch.-Post", 'OnBeforePostVendorEntry', '', false, false)]
-    local procedure OnBeforePostVendorEntry(
-            var GenJnlLine: Record "Gen. Journal Line";
-            var PurchHeader: Record "Purchase Header";
-            var TotalPurchLine: Record "Purchase Line";
-            var TotalPurchLineLCY: Record "Purchase Line";
-            PreviewMode: Boolean;
-            CommitIsSupressed: Boolean;
-             var GenJnlPostLine: Codeunit "Gen. Jnl.-Post Line")
-    var
-        QRBillCurrencyCode: Code[10];
-        ErrText: Text;
-    begin
-        if PurchHeader."Swiss QR-Bill" and (PurchHeader."Prepayment %" = 0) and (PurchHeader."Swiss QR-Bill Amount" <> 0) then begin
-            QRBillCurrencyCode := SwissQRBillIncomingDoc.GetCurrency(PurchHeader."Swiss QR-Bill Currency");
-            if PurchHeader."Currency Code" <> QRBillCurrencyCode then begin
-                ErrText := StrSubstNo(CurrencyErr, QRBillCurrencyCode, PurchHeader."Currency Code");
-                Error(ErrText);
-            end;
-            if Abs(TotalPurchLine."Amount Including VAT") <> PurchHeader."Swiss QR-Bill Amount" then begin
-                ErrText := StrSubstNo(AmountErr, PurchHeader."Swiss QR-Bill Amount", Abs(TotalPurchLine."Amount Including VAT"));
-                Error(ErrText);
-            end;
-            VoidPurchDocQRBill(PurchHeader);
-        end;
-    end;
-#endif
 
     [EventSubscriber(ObjectType::Codeunit, Codeunit::"Purch. Post Invoice Events", 'OnPostLedgerEntryOnBeforeGenJnlPostLine', '', false, false)]
     local procedure OnPostLedgerEntryOnBeforeGenJnlPostLine(
@@ -600,7 +574,18 @@ codeunit 11502 "Swiss QR-Bill Purchases"
                 ErrText := StrSubstNo(AmountErr, PurchHeader."Swiss QR-Bill Amount", Abs(TotalPurchLine."Amount Including VAT"));
                 Error(ErrText);
             end;
-            VoidPurchDocQRBill(PurchHeader);
         end;
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Purch.-Post", 'OnAfterUpdatePurchaseHeader', '', false, false)]
+    local procedure OnAfterUpdatePurchaseHeader(var PurchaseHeader: Record "Purchase Header")
+    begin
+        if PurchaseHeader."Swiss QR-Bill" and (PurchaseHeader."Prepayment %" = 0) and (PurchaseHeader."Swiss QR-Bill Amount" <> 0) then
+            VoidPurchDocQRBill(PurchaseHeader);
+    end;
+    
+    [IntegrationEvent(false, false)]
+    local procedure OnBeforeQRBillImportDecodeToPurchase(var PurchaseHeader: Record "Purchase Header")
+    begin
     end;
 }

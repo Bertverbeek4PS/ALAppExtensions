@@ -1,4 +1,4 @@
-﻿// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License. See License.txt in the project root for license information.
 // ------------------------------------------------------------------------------------------------
@@ -153,6 +153,8 @@ table 18603 "Gate Entry Header"
     }
 
     trigger OnInsert()
+    var
+        NoSeries: Codeunit "No. Series";
     begin
         "Document Date" := WorkDate();
         "Document Time" := Time;
@@ -166,12 +168,18 @@ table 18603 "Gate Entry Header"
             "Entry Type"::Inward:
                 if "No." = '' then begin
                     InventorySetup.TestField("Inward Gate Entry Nos.");
-                    NoSeriesManagement.InitSeries(InventorySetup."Inward Gate Entry Nos.", xRec."No. Series", "Posting Date", "No.", "No. Series");
+                        "No. Series" := InventorySetup."Inward Gate Entry Nos.";
+                        if NoSeries.AreRelated("No. Series", xRec."No. Series") then
+                            "No. Series" := xRec."No. Series";
+                        "No." := NoSeries.GetNextNo("No. Series", "Posting Date");
                 end;
             "Entry Type"::Outward:
                 if "No." = '' then begin
                     InventorySetup.TestField("Outward Gate Entry Nos.");
-                    NoSeriesManagement.InitSeries(InventorySetup."Outward Gate Entry Nos.", xRec."No. Series", "Posting Date", "No.", "No. Series");
+                        "No. Series" := InventorySetup."Outward Gate Entry Nos.";
+                        if NoSeries.AreRelated("No. Series", xRec."No. Series") then
+                            "No. Series" := xRec."No. Series";
+                        "No." := NoSeries.GetNextNo("No. Series", "Posting Date");
                 end;
         end;
     end;
@@ -192,29 +200,26 @@ table 18603 "Gate Entry Header"
 
     var
         InventorySetup: Record "Inventory Setup";
-        NoSeriesManagement: Codeunit NoSeriesManagement;
 
     procedure AssistEdit(OldGateEntryHeader: Record "Gate Entry Header"): Boolean
+    var
+        NoSeries: Codeunit "No. Series";
     begin
         InventorySetup.Get();
         case "Entry Type" of
             "Entry Type"::Inward:
                 begin
                     InventorySetup.TestField("Inward Gate Entry Nos.");
-                    if NoSeriesManagement.SelectSeries(InventorySetup."Inward Gate Entry Nos.", OldGateEntryHeader."No. Series", "No. Series") then begin
-                        InventorySetup.Get();
-                        InventorySetup.TestField("Inward Gate Entry Nos.");
-                        NoSeriesManagement.SetSeries("No.");
+                    if NoSeries.LookupRelatedNoSeries(InventorySetup."Inward Gate Entry Nos.", OldGateEntryHeader."No. Series", "No. Series") then begin
+                        "No." := NoSeries.GetNextNo("No. Series");
                         exit(true);
                     end;
                 end;
             "Entry Type"::Outward:
                 begin
                     InventorySetup.TestField("Outward Gate Entry Nos.");
-                    if NoSeriesManagement.SelectSeries(InventorySetup."Outward Gate Entry Nos.", OldGateEntryHeader."No. Series", "No. Series") then begin
-                        InventorySetup.Get();
-                        InventorySetup.TestField("Outward Gate Entry Nos.");
-                        NoSeriesManagement.SetSeries("No.");
+                    if NoSeries.LookupRelatedNoSeries(InventorySetup."Outward Gate Entry Nos.", OldGateEntryHeader."No. Series", "No. Series") then begin
+                        "No." := NoSeries.GetNextNo("No. Series");
                         exit(true);
                     end;
                 end;

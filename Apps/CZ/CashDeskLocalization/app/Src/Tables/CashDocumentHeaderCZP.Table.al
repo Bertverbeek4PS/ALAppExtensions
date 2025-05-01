@@ -1,4 +1,4 @@
-﻿// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License. See License.txt in the project root for license information.
 // ------------------------------------------------------------------------------------------------
@@ -24,7 +24,6 @@ using Microsoft.Utilities;
 using System.Automation;
 using System.Reflection;
 using System.Security.AccessControl;
-using System.Security.User;
 using System.Utilities;
 
 #pragma warning disable AA0232
@@ -57,15 +56,18 @@ table 11732 "Cash Document Header CZP"
         field(2; "No."; Code[20])
         {
             Caption = 'No.';
+            OptimizeForTextSearch = true;
             DataClassification = CustomerContent;
 
             trigger OnValidate()
+            var
+                NoSeries: Codeunit "No. Series";
             begin
                 if xRec."No." <> '' then
                     TestField("No.", "No.");
 
                 if "No." <> xRec."No." then begin
-                    NoSeriesManagement.TestManual(GetNoSeriesCode());
+                    NoSeries.TestManual(GetNoSeriesCode());
                     "No. Series" := '';
                 end;
             end;
@@ -94,7 +96,7 @@ table 11732 "Cash Document Header CZP"
                 end;
 
                 "Document Date" := "Posting Date";
-                "VAT Date" := "Posting Date";
+                Validate("VAT Date", "Posting Date");
             end;
         }
         field(7; Amount; Decimal)
@@ -219,6 +221,11 @@ table 11732 "Cash Document Header CZP"
         {
             Caption = 'VAT Date';
             DataClassification = CustomerContent;
+
+            trigger OnValidate()
+            begin
+                UpdateCashDocumentLinesByFieldNo(FieldNo("VAT Date"), CurrFieldNo <> 0);
+            end;
         }
         field(38; "Created Date"; Date)
         {
@@ -239,6 +246,8 @@ table 11732 "Cash Document Header CZP"
             trigger OnValidate()
             begin
                 CreateDimFromDefaultDim(Rec.FieldNo("Salespers./Purch. Code"));
+                UpdateCashDocumentLinesByFieldNo(
+                    Rec.FieldNo("Salespers./Purch. Code"), CurrFieldNo = Rec.FieldNo("Salespers./Purch. Code"));
             end;
         }
         field(45; "Amounts Including VAT"; Boolean)
@@ -302,7 +311,8 @@ table 11732 "Cash Document Header CZP"
 
             trigger OnValidate()
             begin
-                UpdateCashDocumentLinesByFieldNo(FieldNo("External Document No."), CurrFieldNo <> 0);
+                UpdateCashDocumentLinesByFieldNo(
+                    FieldNo("External Document No."), CurrFieldNo = Rec.FieldNo("External Document No."));
             end;
         }
         field(62; "Responsibility Center"; Code[10])
@@ -313,15 +323,18 @@ table 11732 "Cash Document Header CZP"
 
             trigger OnValidate()
             begin
-                if not UserSetupManagement.CheckRespCenter(3, "Responsibility Center") then
+                if not CashDeskManagementCZP.CheckResponsibilityCenter("Responsibility Center") then
                     Error(RespCenterErr, FieldCaption("Responsibility Center"), CashDeskManagementCZP.GetUserCashResponsibilityFilter(CopyStr(UserId(), 1, 50)));
 
                 CreateDimFromDefaultDim(Rec.FieldNo("Responsibility Center"));
+                UpdateCashDocumentLinesByFieldNo(
+                    FieldNo("Responsibility Center"), CurrFieldNo = Rec.FieldNo("Responsibility Center"));
             end;
         }
         field(65; "Payment Purpose"; Text[100])
         {
             Caption = 'Payment Purpose';
+            OptimizeForTextSearch = true;
             DataClassification = CustomerContent;
         }
         field(70; "Received By"; Text[100])
@@ -354,6 +367,7 @@ table 11732 "Cash Document Header CZP"
         field(73; "Received From"; Text[100])
         {
             Caption = 'Received From';
+            OptimizeForTextSearch = true;
             DataClassification = CustomerContent;
 
             trigger OnValidate()
@@ -364,6 +378,7 @@ table 11732 "Cash Document Header CZP"
         field(74; "Paid To"; Text[100])
         {
             Caption = 'Paid To';
+            OptimizeForTextSearch = true;
             DataClassification = CustomerContent;
 
             trigger OnValidate()
@@ -592,6 +607,7 @@ table 11732 "Cash Document Header CZP"
     var
         PaymentTxt: Label 'Payment %1', Comment = '%1 = Document No.';
         RefundTxt: Label 'Refund %1', Comment = '%1 = Document No.';
+        InvoiceTxt: Label 'Invoice %1', Comment = '%1 = Document No.';
 
     trigger OnDelete()
     var
@@ -599,13 +615,13 @@ table 11732 "Cash Document Header CZP"
         CashDocumentPostCZP: Codeunit "Cash Document-Post CZP";
     begin
         TestField(Status, Status::Open);
-        if not ConfirmManagement.GetResponseOrDefault(DeleteQst, false) then
+        if not ConfirmManagement.GetResponseOrDefault(StrSubstNo(DeleteQst, "No."), false) then
             Error('');
 
         DeleteRecordInApprovalRequest();
 
         CashDeskManagementCZP.CheckCashDesks();
-        if not UserSetupManagement.CheckRespCenter(3, "Responsibility Center") then
+        if not CashDeskManagementCZP.CheckResponsibilityCenter("Responsibility Center") then
             Error(RespCenterDeleteErr, FieldCaption("Responsibility Center"), CashDeskManagementCZP.GetUserCashResponsibilityFilter(CopyStr(UserId(), 1, 50)));
 
         CashDocumentPostCZP.DeleteCashDocumentHeader(Rec);
@@ -613,11 +629,14 @@ table 11732 "Cash Document Header CZP"
         CashDocumentLineCZP.SetRange("Cash Desk No.", "Cash Desk No.");
         CashDocumentLineCZP.SetRange("Cash Document No.", "No.");
         CashDocumentLineCZP.DeleteAll(true);
+
+        Message(PostedDocsToPrintCreatedMsg);
     end;
 
     trigger OnInsert()
     var
         CashDeskUserCZP: Record "Cash Desk User CZP";
+        NoSeries: Codeunit "No. Series";
     begin
         TestField("Cash Desk No.");
         TestField("Document Type");
@@ -639,12 +658,18 @@ table 11732 "Cash Document Header CZP"
                 "Document Type"::Receipt:
                     begin
                         CashDeskCZP.TestField("Cash Document Receipt Nos.");
-                        NoSeriesManagement.InitSeries(CashDeskCZP."Cash Document Receipt Nos.", xRec."No. Series", WorkDate(), "No.", "No. Series");
+                            "No. Series" := CashDeskCZP."Cash Document Receipt Nos.";
+                            if NoSeries.AreRelated("No. Series", xRec."No. Series") then
+                                "No. Series" := xRec."No. Series";
+                            "No." := NoSeries.GetNextNo("No. Series");
                     end;
                 "Document Type"::Withdrawal:
                     begin
                         CashDeskCZP.TestField("Cash Document Withdrawal Nos.");
-                        NoSeriesManagement.InitSeries(CashDeskCZP."Cash Document Withdrawal Nos.", xRec."No. Series", WorkDate(), "No.", "No. Series");
+                            "No. Series" := CashDeskCZP."Cash Document Withdrawal Nos.";
+                            if NoSeries.AreRelated("No. Series", xRec."No. Series") then
+                                "No. Series" := xRec."No. Series";
+                            "No." := NoSeries.GetNextNo("No. Series");
                     end;
             end;
 
@@ -671,7 +696,7 @@ table 11732 "Cash Document Header CZP"
 
     trigger OnModify()
     begin
-        if not UserSetupManagement.CheckRespCenter(3, "Responsibility Center") then
+        if not CashDeskManagementCZP.CheckResponsibilityCenter("Responsibility Center") then
             Error(RespCenterModifyErr, FieldCaption("Responsibility Center"), CashDeskManagementCZP.GetUserCashResponsibilityFilter(CopyStr(UserId(), 1, 50)));
     end;
 
@@ -688,9 +713,7 @@ table 11732 "Cash Document Header CZP"
         Contact: Record Contact;
         SalespersonPurchaser: Record "Salesperson/Purchaser";
         Employee: Record Employee;
-        NoSeriesManagement: Codeunit NoSeriesManagement;
         DimensionManagement: Codeunit DimensionManagement;
-        UserSetupManagement: Codeunit "User Setup Management";
         ConfirmManagement: Codeunit "Confirm Management";
         CashDeskManagementCZP: Codeunit "Cash Desk Management CZP";
         RenameErr: Label 'You cannot rename a %1.', Comment = '%1 = TableCaption';
@@ -702,17 +725,20 @@ table 11732 "Cash Document Header CZP"
         RespCenterDeleteErr: Label 'You cannot delete this document. Your identification is set up to process from %1 %2 only.', Comment = '%1 = fieldcaption of Responsibility Center; %2 = Responsibility Center';
         RespCreateErr: Label 'You are not allowed create %1 on %2 %3.', Comment = '%1 = TableCaption, %2 = Cash Desk TableCaption, %3= Cash Desk No.';
         CreateQst: Label 'Do you want to create %1 at Cash Desk %2?', Comment = '%1 = Cash Document Type, %2 = Cash Desk No.';
-        DeleteQst: Label 'Deleting this document will cause a gap in the number series for posted cash documents.\Do you want continue?';
+        DeleteQst: Label 'Deleting this document will cause a gap in the number series for posted cash documents. An empty posted cash document %1 will be created to fill this gap in the number series.\\Do you want to continue?', Comment = '%1 = Document No.';
+        PostedDocsToPrintCreatedMsg: Label 'One or more related posted documents have been generated during deletion to fill gaps in the number series. You can view or print the documents from the respective document archive.';
         CurrencyDate: Date;
         SkipLineNo: Integer;
         HideValidationDialog: Boolean;
 
     procedure AssistEdit(OldCashDocumentHeaderCZP: Record "Cash Document Header CZP"): Boolean
+    var
+        NoSeries: Codeunit "No. Series";
     begin
         OldCashDocumentHeaderCZP.Copy(Rec);
         TestNoSeries();
-        if NoSeriesManagement.SelectSeries(GetNoSeriesCode(), OldCashDocumentHeaderCZP."No. Series", OldCashDocumentHeaderCZP."No. Series") then begin
-            NoSeriesManagement.SetSeries(OldCashDocumentHeaderCZP."No.");
+        if NoSeries.LookupRelatedNoSeries(GetNoSeriesCode(), OldCashDocumentHeaderCZP."No. Series", OldCashDocumentHeaderCZP."No. Series") then begin
+            OldCashDocumentHeaderCZP."No." := NoSeries.GetNextNo(OldCashDocumentHeaderCZP."No. Series");
             Rec := OldCashDocumentHeaderCZP;
             exit(true);
         end;
@@ -814,7 +840,8 @@ table 11732 "Cash Document Header CZP"
             Modify();
 
         if OldDimSetID <> "Dimension Set ID" then begin
-            Modify();
+            if not IsNullGuid(Rec.SystemId) then
+                Modify();
             if CashDocLinesExist() then
                 UpdateAllLineDim("Dimension Set ID", OldDimSetID);
         end;
@@ -921,6 +948,12 @@ table 11732 "Cash Document Header CZP"
                     FieldNo("Amounts Including VAT"):
                         if CashDocumentLineCZP.Amount <> 0 then
                             CashDocumentLineCZP.Validate(Amount);
+                    FieldNo("Salespers./Purch. Code"):
+                        CashDocumentLineCZP."Salespers./Purch. Code" := "Salespers./Purch. Code";
+                    FieldNo("Responsibility Center"):
+                        CashDocumentLineCZP."Responsibility Center" := "Responsibility Center";
+                    FieldNo("VAT Date"):
+                        CashDocumentLineCZP.UpdateAmounts();
                 end;
                 CashDocumentLineCZP.Modify(true);
             until CashDocumentLineCZP.Next() = 0;
@@ -1201,7 +1234,7 @@ table 11732 "Cash Document Header CZP"
         "Shortcut Dimension 1 Code" := PurchInvHeader."Shortcut Dimension 1 Code";
         "Shortcut Dimension 2 Code" := PurchInvHeader."Shortcut Dimension 2 Code";
         "Dimension Set ID" := PurchInvHeader."Dimension Set ID";
-        "Payment Purpose" := StrSubstNo(RefundTxt, PurchInvHeader."No.");
+        "Payment Purpose" := StrSubstNo(InvoiceTxt, PurchInvHeader."No.");
         "Partner Type" := "Partner Type"::Vendor;
         Validate("Partner No.", PurchInvHeader."Buy-from Vendor No.");
         OnAfterCopyCashDocumentHeaderFromPurchInvHeader(PurchInvHeader, Rec);

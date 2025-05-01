@@ -265,6 +265,12 @@ report 31192 "Sales Return Reciept CZL"
                     column(UnitofMeasure_ReturnReceiptLine; "Unit of Measure")
                     {
                     }
+
+                    trigger OnAfterGetRecord()
+                    begin
+                        if FormatDocument.HideDocumentLine(HideLinesWithZeroQuantity, "Return Receipt Line", FieldNo(Quantity)) then
+                            CurrReport.Skip();
+                    end;
                 }
                 dataitem("User Setup"; "User Setup")
                 {
@@ -351,6 +357,12 @@ report 31192 "Sales Return Reciept CZL"
                         Caption = 'Show Serial/Lot Number Appendix';
                         ToolTip = 'Specifies when the show serial/lot number appendixis to be show';
                     }
+                    field(HideLinesWithZeroQuantityControl; HideLinesWithZeroQuantity)
+                    {
+                        ApplicationArea = Basic, Suite;
+                        ToolTip = 'Specifies if the lines with zero quantity are printed.';
+                        Caption = 'Hide lines with zero quantity';
+                    }
                 }
             }
         }
@@ -372,21 +384,12 @@ report 31192 "Sales Return Reciept CZL"
     end;
 
     var
-        ShipmentMethod: Record "Shipment Method";
         LanguageMgt: Codeunit Language;
         FormatAddress: Codeunit "Format Address";
         FormatDocument: Codeunit "Format Document";
         FormatDocumentMgtCZL: Codeunit "Format Document Mgt. CZL";
         SegManagement: Codeunit SegManagement;
-        CompanyAddr: array[8] of Text[100];
-        CustAddr: array[8] of Text[100];
-        ShipToAddr: array[8] of Text[100];
-        DocFooterText: Text[1000];
-        NoOfCopies: Integer;
-        NoOfLoops: Integer;
-        LogInteraction: Boolean;
         LogInteractionEnable: Boolean;
-        ShowLotSN: Boolean;
         DocumentLbl: Label 'Return Receipt';
         PageLbl: Label 'Page';
         CopyLbl: Label 'Copy';
@@ -403,6 +406,18 @@ report 31192 "Sales Return Reciept CZL"
         DiscPercentLbl: Label 'Discount %';
         TotalLbl: Label 'total';
         VATLbl: Label 'VAT';
+
+    protected var
+        ShipmentMethod: Record "Shipment Method";
+        CompanyAddr: array[8] of Text[100];
+        CustAddr: array[8] of Text[100];
+        ShipToAddr: array[8] of Text[100];
+        DocFooterText: Text[1000];
+        NoOfCopies: Integer;
+        NoOfLoops: Integer;
+        LogInteraction: Boolean;
+        ShowLotSN: Boolean;
+        HideLinesWithZeroQuantity: Boolean;
 
     procedure InitLogInteraction()
     begin

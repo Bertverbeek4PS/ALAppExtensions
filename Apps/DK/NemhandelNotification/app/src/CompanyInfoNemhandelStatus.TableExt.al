@@ -20,17 +20,17 @@ tableextension 13608 "Company Info. Nemhandel Status" extends "Company Informati
         modify("Registration No.")
         {
             trigger OnBeforeValidate()
-#if not CLEAN24
-            var
-                NemhandelStatusMgt: Codeunit "Nemhandel Status Mgt.";
-#endif
             begin
-#if not CLEAN24
-                if not NemhandelStatusMgt.IsFeatureEnableDatePassed() then
+                if not NemhandelStatusMgt.IsSaaSProductionCompany() then
                     exit;
-#endif
-                if "Registered with Nemhandel" = "Nemhandel Company Status"::Registered then
+
+                NemhandelStatusMgt.ValidateCVRNumberFormat("Registration No.");
+
+                if "Registered with Nemhandel" = "Nemhandel Company Status"::Registered then begin
+                    if Rec."Registration No." <> xRec."Registration No." then
+                        Error(CannotChangeRegistrationNoErr);
                     exit;
+                end;
 
                 "Registered with Nemhandel" := "Nemhandel Company Status"::Unknown;
                 if CurrFieldNo = FieldNo("Registration No.") then
@@ -38,6 +38,16 @@ tableextension 13608 "Company Info. Nemhandel Status" extends "Company Informati
                 if TaskScheduler.CanCreateTask() then
                     TaskScheduler.CreateTask(Codeunit::"Upd. Registered with Nemhandel", 0);
             end;
+
+            trigger OnAfterValidate()
+            begin
+                if Rec."Registration No." <> '' then
+                    NemhandelStatusMgt.ManageIncorrectCVRFormatNotification(Rec."Registration No.");
+            end;
         }
     }
+
+    var
+        NemhandelStatusMgt: Codeunit "Nemhandel Status Mgt.";
+        CannotChangeRegistrationNoErr: Label 'Registration No. cannot be changed when CVR number is registered in Nemhandelsregisteret.';
 }

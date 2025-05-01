@@ -5,6 +5,7 @@
 namespace Microsoft.Finance.CashDesk;
 
 using Microsoft.Finance.Currency;
+using Microsoft.Finance.VAT.Calculation;
 using Microsoft.Foundation.Attachment;
 using Microsoft.Utilities;
 using System.Automation;
@@ -77,7 +78,8 @@ page 31160 "Cash Document CZP"
                 field("VAT Date"; Rec."VAT Date")
                 {
                     ApplicationArea = Basic, Suite;
-                    Editable = DateEditable;
+                    Editable = VATDateEnabled;
+                    Visible = VATDateEnabled;
                     ToolTip = 'Specifies the VAT date. This date must be shown on the VAT statement.';
                 }
                 field("Paid To"; Rec."Paid To")
@@ -265,11 +267,22 @@ page 31160 "Cash Document CZP"
         }
         area(factboxes)
         {
+#if not CLEAN25
             part("Attached Documents"; "Document Attachment Factbox")
             {
+                ObsoleteTag = '25.0';
+                ObsoleteState = Pending;
+                ObsoleteReason = 'The "Document Attachment FactBox" has been replaced by "Doc. Attachment List Factbox", which supports multiple files upload.';
                 ApplicationArea = All;
                 Caption = 'Attachments';
-                SubPageLink = "Table ID" = const(11732), "No." = field("No.");
+                SubPageLink = "Table ID" = const(database::"Cash Document Header CZP"), "No." = field("No.");
+            }
+#endif
+            part("Attached Documents List"; "Doc. Attachment List Factbox")
+            {
+                ApplicationArea = All;
+                Caption = 'Documents';
+                SubPageLink = "Table ID" = const(database::"Cash Document Header CZP"), "No." = field("No.");
             }
             systempart(Links; Links)
             {
@@ -683,43 +696,6 @@ page 31160 "Cash Document CZP"
                 {
                 }
             }
-#if not CLEAN22
-#pragma warning disable AS0072
-            group(Category_Category4)
-            {
-                Caption = 'Approve';
-                ObsoleteTag = '22.0';
-                ObsoleteState = Pending;
-                ObsoleteReason = 'This group has been removed.';
-                Visible = false;
-
-                actionref(ApprovePromoted; Approve)
-                {
-                    ObsoleteTag = '22.0';
-                    ObsoleteState = Pending;
-                    ObsoleteReason = 'This group has been removed.';
-                }
-                actionref(RejectPromoted; Reject)
-                {
-                    ObsoleteTag = '22.0';
-                    ObsoleteState = Pending;
-                    ObsoleteReason = 'This group has been removed.';
-                }
-                actionref(CommentPromoted; Comment)
-                {
-                    ObsoleteTag = '22.0';
-                    ObsoleteState = Pending;
-                    ObsoleteReason = 'This group has been removed.';
-                }
-                actionref(DelegatePromoted; Delegate)
-                {
-                    ObsoleteTag = '22.0';
-                    ObsoleteState = Pending;
-                    ObsoleteReason = 'This group has been removed.';
-                }
-            }
-#pragma warning restore AS0072
-#endif
             group(Category_Category7)
             {
                 Caption = 'Posting';
@@ -749,31 +725,6 @@ page 31160 "Cash Document CZP"
                 {
                 }
             }
-#if not CLEAN22
-#pragma warning disable AS0072
-            group(Category_Report)
-            {
-                Caption = 'Report';
-                ObsoleteTag = '22.0';
-                ObsoleteState = Pending;
-                ObsoleteReason = 'This group has been removed.';
-                Visible = false;
-
-                actionref(PrinttoAttachmentPromoted; PrintToAttachment)
-                {
-                    ObsoleteTag = '22.0';
-                    ObsoleteState = Pending;
-                    ObsoleteReason = 'This group has been removed.';
-                }
-                actionref(PrintPromoted; "&Print")
-                {
-                    ObsoleteTag = '22.0';
-                    ObsoleteState = Pending;
-                    ObsoleteReason = 'This group has been removed.';
-                }
-            }
-#pragma warning restore AS0072
-#endif
             group(Category_Category9)
             {
                 Caption = 'Print';
@@ -792,37 +743,17 @@ page 31160 "Cash Document CZP"
                 actionref(DimensionsPromoted; Dimensions)
                 {
                 }
-#if not CLEAN22
-                actionref(StatisticsPomoted; Statistics)
-                {
-                    ObsoleteTag = '22.0';
-                    ObsoleteState = Pending;
-                    ObsoleteReason = 'This actionref has been removed.';
-                    Visible = false;
-                }
-                actionref(DocAttachPromoted; DocAttach)
-                {
-                    ObsoleteTag = '22.0';
-                    ObsoleteState = Pending;
-                    ObsoleteReason = 'This actionref has been removed.';
-                    Visible = false;
-                }
-#endif
                 actionref(ApprovalsPromoted; "A&pprovals")
                 {
                 }
-#if not CLEAN22
-                actionref(CopyDocumentPomoted; CopyDocument)
-                {
-                    ObsoleteTag = '22.0';
-                    ObsoleteState = Pending;
-                    ObsoleteReason = 'This actionref has been removed.';
-                    Visible = false;
-                }
-#endif
             }
         }
     }
+
+    trigger OnOpenPage()
+    begin
+        VATDateEnabled := VATReportingDateMgt.IsVATDateEnabled();
+    end;
 
     trigger OnAfterGetCurrRecord()
     begin
@@ -843,13 +774,14 @@ page 31160 "Cash Document CZP"
 
     trigger OnNewRecord(BelowxRec: Boolean)
     var
+        CashDeskCZP: Record "Cash Desk CZP";
         CashDeskManagementCZP: Codeunit "Cash Desk Management CZP";
         CashDeskNo: Code[20];
         CashDeskSelected: Boolean;
     begin
         if Rec.GetFilter("Cash Desk No.") <> '' then
-            if Rec.GetRangeMin("Cash Desk No.") = Rec.GetRangeMax("Cash Desk No.") then
-                CashDeskNo := Rec.GetRangeMin("Cash Desk No.");
+            if CashDeskCZP.Get(Rec.GetFilter("Cash Desk No.")) then
+                CashDeskNo := CashDeskCZP."No.";
 
         if CashDeskNo = '' then begin
             CashDeskManagementCZP.CashDocumentSelection(Rec, CashDeskSelected);
@@ -867,6 +799,7 @@ page 31160 "Cash Document CZP"
     end;
 
     var
+        VATReportingDateMgt: Codeunit "VAT Reporting Date Mgt";
         ChangeExchangeRate: Page "Change Exchange Rate";
         NavigateAfterPost: Option "Posted Document","New Document","Do Nothing";
         NavigateAfterRelease: Option "Released Document","New Document","Do Nothing";
@@ -881,6 +814,7 @@ page 31160 "Cash Document CZP"
         OpenPostedCashDocQst: Label 'The cash document has been posted and moved to the Posted Cash Documents window.\\Do you want to open the posted cash document?';
         DocumentIsPosted: Boolean;
         DocumentIsReleased: Boolean;
+        VATDateEnabled: Boolean;
 
     local procedure PostDocument(PostingCodeunitID: Integer; Navigate: Option)
     var

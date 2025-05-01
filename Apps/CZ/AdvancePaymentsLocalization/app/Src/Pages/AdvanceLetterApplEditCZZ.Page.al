@@ -29,26 +29,17 @@ page 31175 "Advance Letter Appl. Edit CZZ"
                     begin
                         if Rec."Advance Letter No." <> '' then begin
                             TempAdvanceLetterApplication.Get(Rec."Advance Letter Type", Rec."Advance Letter No.", Rec."Document Type", Rec."Document No.");
-                            Rec."Advance Letter Type" := TempAdvanceLetterApplication."Advance Letter Type";
-                            Rec."Advance Letter No." := TempAdvanceLetterApplication."Advance Letter No.";
-                            Rec."Document Type" := TempAdvanceLetterApplication."Document Type";
-                            Rec."Document No." := TempAdvanceLetterApplication."Document No.";
-                            Rec."Posting Date" := TempAdvanceLetterApplication."Posting Date";
-                            Rec.Amount := TempAdvanceLetterApplication.Amount;
-                            Rec."Amount (LCY)" := TempAdvanceLetterApplication."Amount (LCY)";
+                            Rec.CopyFrom(TempAdvanceLetterApplication);
                         end
                     end;
 
                     trigger OnLookup(var Text: Text): Boolean
                     begin
+                        OnBeforeOnLookupAdvanceLetterNo(Rec, TempAdvanceLetterApplication);
+
                         if Page.RunModal(Page::"Advance Letter Application CZZ", TempAdvanceLetterApplication) = Action::LookupOK then begin
-                            Rec."Advance Letter Type" := TempAdvanceLetterApplication."Advance Letter Type";
-                            Rec."Advance Letter No." := TempAdvanceLetterApplication."Advance Letter No.";
-                            Rec."Document Type" := TempAdvanceLetterApplication."Document Type";
-                            Rec."Document No." := TempAdvanceLetterApplication."Document No.";
-                            Rec."Posting Date" := TempAdvanceLetterApplication."Posting Date";
-                            Rec.Amount := TempAdvanceLetterApplication.Amount;
-                            Rec."Amount (LCY)" := TempAdvanceLetterApplication."Amount (LCY)";
+                            Rec.CopyFrom(TempAdvanceLetterApplication);
+                            OnAfterOnLookupAdvanceLetterNo(Rec);
                         end;
                     end;
                 }
@@ -69,6 +60,16 @@ page 31175 "Advance Letter Appl. Edit CZZ"
                         if Rec.Amount > TempAdvanceLetterApplication.Amount then
                             Error(AmountExceededErr, TempAdvanceLetterApplication.Amount);
                     end;
+                }
+                field("Job No."; Rec."Job No.")
+                {
+                    ApplicationArea = Basic, Suite;
+                    Visible = false;
+                }
+                field("Job Task No."; Rec."Job Task No.")
+                {
+                    ApplicationArea = Basic, Suite;
+                    Visible = false;
                 }
             }
         }
@@ -168,5 +169,15 @@ page 31175 "Advance Letter Appl. Edit CZZ"
                     NewAdvanceLetterApplication.Insert();
                 end;
             until Rec.Next() = 0;
+    end;
+
+    [IntegrationEvent(true, false)]
+    local procedure OnBeforeOnLookupAdvanceLetterNo(var AdvanceLetterApplicationCZZ: Record "Advance Letter Application CZZ"; var TempAdvanceLetterApplicationCZZ: Record "Advance Letter Application CZZ" temporary)
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnAfterOnLookupAdvanceLetterNo(var AdvanceLetterApplicationCZZ: Record "Advance Letter Application CZZ")
+    begin
     end;
 }

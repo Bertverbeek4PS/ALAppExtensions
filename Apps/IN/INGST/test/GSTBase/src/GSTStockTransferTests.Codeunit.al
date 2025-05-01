@@ -148,6 +148,154 @@ codeunit 18427 "GST Stock Transfer Tests"
         VerifyGSTEntries(PostedDocumentNo);
     end;
 
+    [Test]
+    [HandlerFunctions('TaxRatesPage')]
+    procedure PostFromTransferOrderwithInterStateStockTransferAndGenerateEInv()
+    var
+        FromLocation, ToLocation, InTransitLocation : Record Location;
+        TransferHeader: Record "Transfer Header";
+        TransferLine: Record "Transfer Line";
+        TransferShipHead: Record "Transfer Shipment Header";
+        PostedTransShip: TestPage "Posted Transfer Shipment";
+        GSTGroupType: Enum "GST Group Type";
+        PostedDocumentNo: Code[20];
+    begin
+        // [SCENARIO] [453739] Check if the system is able to Post with GST in case of Inter-State Stock Transfer Shipment and Receipt.
+        // [GIVEN] Created GST Setup ,Transfer Locations
+        CreateTransferLocations(FromLocation, ToLocation, InTransitLocation);
+        CreateGSTSetup(GSTGroupType::Goods, false, false);
+
+        // [WHEN] Create and Post Interstate Transfer Order
+        PostedDocumentNo := CreateandPostTransferOrder(
+            TransferHeader,
+            TransferLine);
+
+        // [THEN] Verify E-Invoice Generated
+        TransferShipHead.Get(PostedDocumentNo);
+        PostedTransShip.OpenEdit();
+        PostedTransShip.GoToRecord(TransferShipHead);
+        PostedTransShip."Generate E-Invoice".Invoke();
+        PostedTransShip.Close();
+        Assert.IsTrue(true, 'E-Invoice generated');
+    end;
+
+    [Test]
+    [HandlerFunctions('TaxRatesPage')]
+    procedure PostFromTransferOrderwithInterStateStockTransferAndGenerateIRN()
+    var
+        FromLocation, ToLocation, InTransitLocation : Record Location;
+        TransferHeader: Record "Transfer Header";
+        TransferLine: Record "Transfer Line";
+        TransferShipHead: Record "Transfer Shipment Header";
+        PostedTransShip: TestPage "Posted Transfer Shipment";
+        GSTGroupType: Enum "GST Group Type";
+        PostedDocumentNo: Code[20];
+    begin
+        // [SCENARIO] [453739] Check if the system is able to Post with GST in case of Inter-State Stock Transfer Shipment and Receipt.
+        // [GIVEN] Created GST Setup ,Transfer Locations
+        CreateTransferLocations(FromLocation, ToLocation, InTransitLocation);
+        CreateGSTSetup(GSTGroupType::Goods, false, false);
+
+        // [WHEN] Create and Post Interstate Transfer Order
+        PostedDocumentNo := CreateandPostTransferOrder(
+            TransferHeader,
+            TransferLine);
+
+        // [THEN] Verify E-Invoice IRN Generated
+        TransferShipHead.Get(PostedDocumentNo);
+        PostedTransShip.OpenEdit();
+        PostedTransShip.GoToRecord(TransferShipHead);
+        PostedTransShip."Generate IRN".Invoke();
+        PostedTransShip.Close();
+        Assert.IsTrue(true, 'IRN Generated');
+    end;
+
+    [Test]
+    [HandlerFunctions('TaxRatesPage')]
+    procedure PostFromTransferOrderwithInterStateStockTransferAndCheckGSTApplicable()
+    var
+        FromLocation, ToLocation, InTransitLocation : Record Location;
+        TransferHeader: Record "Transfer Header";
+        TransferLine: Record "Transfer Line";
+        TransferShipHead: Record "Transfer Shipment Header";
+        EInvTransshptJsonMgmt: Codeunit EInvTransshptJsonManagement;
+        PostedTransShip: TestPage "Posted Transfer Shipment";
+        GSTGroupType: Enum "GST Group Type";
+        GSTApplicable: Boolean;
+        PostedDocumentNo: Code[20];
+    begin
+        // [SCENARIO] [453739] Check if the system is able to Post with GST in case of Inter-State Stock Transfer Shipment and Receipt.
+        // [GIVEN] Created GST Setup ,Transfer Locations
+        CreateTransferLocations(FromLocation, ToLocation, InTransitLocation);
+        CreateGSTSetup(GSTGroupType::Goods, false, false);
+
+        // [WHEN] Create and Post Interstate Transfer Order
+        PostedDocumentNo := CreateandPostTransferOrder(
+            TransferHeader,
+            TransferLine);
+
+        // [THEN] Verified GST is applicable for E-Invoice
+        GSTApplicable := EInvTransshptJsonMgmt.IsGSTApplicable(PostedDocumentNo, Database::"Transfer Shipment Header");
+        TransferShipHead.Get(PostedDocumentNo);
+        PostedTransShip.OpenEdit();
+        PostedTransShip.GoToRecord(TransferShipHead);
+        PostedTransShip."Generate E-Invoice".Invoke();
+        EInvTransshptJsonMgmt.IsGSTApplicable(PostedDocumentNo, Database::"Transfer Shipment Header");
+        PostedTransShip.Close();
+        Assert.IsTrue(GSTApplicable, 'GSTApplicable');
+    end;
+
+    [Test]
+    [HandlerFunctions('TaxRatesPage')]
+    procedure PostTransferOrderWithIterStateGSTAndSerialItem()
+    var
+        FromLocation, ToLocation, InTransitLocation : Record Location;
+        TransferHeader: Record "Transfer Header";
+        TransferLine: Record "Transfer Line";
+        GSTGroupType: Enum "GST Group Type";
+        PostedDocumentNo: Code[20];
+    begin
+        // [SCENARIO] [536053] Check is system considers last serial numbers cost for calculation of unrealized profit during transfer shipment
+        // [GIVEN] Created GST Setup ,Transfer Locations
+        CreateTransferLocations(FromLocation, ToLocation, InTransitLocation);
+        CreateGSTSetup(GSTGroupType::Goods, false, true);
+
+        // [WHEN] Create and Post Interstate Transfer Order
+        PostedDocumentNo := CreateandPostTransferOrderForSerialItem(
+            TransferHeader,
+            TransferLine);
+
+        // [THEN] Verify G/L Entries  
+        LibraryGST.VerifyGLEntries("Gen. Journal Document Type"::Invoice, PostedDocumentNo, 2);
+    end;
+
+    [Test]
+    [HandlerFunctions('TaxRatesPage,ConfirmHandlerYes')]
+    procedure PostUndoTransferShipmentwithInterStateStockTransferITC()
+    var
+        FromLocation, ToLocation, InTransitLocation : Record Location;
+        TransferHeader: Record "Transfer Header";
+        TransferLine: Record "Transfer Line";
+        GSTGroupType: Enum "GST Group Type";
+        PostedDocumentNo: Code[20];
+    begin
+        // [SCENARIO] [504612] Check if the system is calculating GST in case of Inter-State Stock Undo Transfer Shipment.
+        // [GIVEN] Created GST Setup ,Transfer Locations with ITC
+        CreateTransferLocations(FromLocation, ToLocation, InTransitLocation);
+        CreateGSTSetup(GSTGroupType::Goods, false, true);
+
+        // [GIVEN] Create and Post Interstate Transfer Order with ITC
+        PostedDocumentNo := CreateandPostTransferOrderWithShipment(
+            TransferHeader,
+            TransferLine);
+
+        // [WHEN] The Transfer Shipment Line is undone and posted again
+        LibraryInventory.UndoTransferShipments(TransferHeader."No.");
+
+        // [THEN] GSTEntries Verified 
+        VerifyGSTEntries(PostedDocumentNo);
+    end;
+
     local procedure CreateItemWithInventory(): Code[20]
     var
         Item: Record Item;
@@ -182,7 +330,7 @@ codeunit 18427 "GST Stock Transfer Tests"
     var
         ItemJournalLine: Record "Item Journal Line";
         ReservationEntry: Record "Reservation Entry";
-        NoSeriesManagement: Codeunit NoSeriesManagement;
+        NoSeries: Codeunit "No. Series";
         InputCreditAvailment: Boolean;
     begin
         InputCreditAvailment := StorageBoolean.Get(AvailmentLbl);
@@ -205,8 +353,46 @@ codeunit 18427 "GST Stock Transfer Tests"
             ItemJournalLine, Item."No.",
             (LibraryStorage.Get(FromLocationLbl)),
             '', LibraryRandom.RandInt(100));
-        LotNo := NoSeriesManagement.GetNextNo(Item."Lot Nos.", WorkDate(), true);
+        LotNo := NoSeries.GetNextNo(Item."Lot Nos.");
         LibraryItemTracking.CreateItemJournalLineItemTracking(ReservationEntry, ItemJournalLine, '', LotNo, ItemJournalLine.Quantity);
+        Codeunit.Run(Codeunit::"Item Jnl.-Post Batch", ItemJournalLine);
+    end;
+
+    local procedure CreateSerialItemWithInventory(var Item: Record Item; var SerialNo: Code[50]; var SerialNo1: Code[50])
+    var
+        ItemJournalLine: Record "Item Journal Line";
+        ReservationEntry: Record "Reservation Entry";
+        NoSeries: Codeunit "No. Series";
+        InputCreditAvailment: Boolean;
+    begin
+        InputCreditAvailment := StorageBoolean.Get(AvailmentLbl);
+
+        CreateNoVatSetup();
+        LibraryItemTracking.CreateSerialItem(Item);
+
+        Item.Validate("GST Group Code", LibraryStorage.Get(GSTGroupCodeLbl));
+        Item.Validate("HSN/SAC Code", LibraryStorage.Get(HSNSACCodeLbl));
+        if InputCreditAvailment then
+            Item.Validate("GST Credit", Item."GST Credit"::Availment)
+        else
+            Item.Validate("GST Credit", Item."GST Credit"::"Non-Availment");
+        Item.Modify(true);
+
+        UpdateInventoryPostingSetup((LibraryStorage.Get(InTransitLocationLbl)), Item."Inventory Posting Group");
+        UpdateInventoryPostingSetup((LibraryStorage.Get(FromLocationLbl)), Item."Inventory Posting Group");
+        UpdateInventoryPostingSetup((LibraryStorage.Get(ToLocationLbl)), Item."Inventory Posting Group");
+        LibraryInventory.CreateItemJournalLineInItemTemplate(
+            ItemJournalLine, Item."No.",
+            (LibraryStorage.Get(FromLocationLbl)),
+            '', 2);
+        ItemJournalLine.Validate("Unit Amount", LibraryRandom.RandDec(100, 2));
+        ItemJournalLine.Modify();
+
+        SerialNo := NoSeries.GetNextNo(Item."Serial Nos.");
+        LibraryItemTracking.CreateItemJournalLineItemTracking(ReservationEntry, ItemJournalLine, SerialNo, '', 1);
+        SerialNo1 := NoSeries.GetNextNo(Item."Serial Nos.");
+        LibraryItemTracking.CreateItemJournalLineItemTracking(ReservationEntry, ItemJournalLine, SerialNo1, '', 1);
+
         Codeunit.Run(Codeunit::"Item Jnl.-Post Batch", ItemJournalLine);
     end;
 
@@ -244,6 +430,24 @@ codeunit 18427 "GST Stock Transfer Tests"
         exit(PostedDocumentNo);
     end;
 
+    local procedure CreateandPostTransferOrderWithShipment(var TransferHeader: Record "Transfer Header";
+        var TransferLine: Record "Transfer Line"): Code[20]
+    var
+        DocumentNo: Code[20];
+        PostedDocumentNo: Code[20];
+    begin
+        LibraryWarehouse.CreateTransferHeader(
+            TransferHeader,
+            (LibraryStorage.Get(FromLocationLbl)),
+            (LibraryStorage.Get(ToLocationLbl)),
+            (LibraryStorage.Get(InTransitLocationLbl)));
+        CreateTransferLineWithGST(TransferHeader, TransferLine, StorageBoolean.Get(AvailmentLbl));
+        DocumentNo := TransferHeader."No.";
+        LibraryWarehouse.PostTransferOrder(TransferHeader, true, false);
+        PostedDocumentNo := GetPostedTransferShipmentNo(DocumentNo);
+        exit(PostedDocumentNo);
+    end;
+
     local procedure CreateandPostTransferOrderWithLoadUnRealizedProfitAmt(var TransferHeader: Record "Transfer Header";
         var TransferLine: Record "Transfer Line"): Code[20]
     var
@@ -265,6 +469,26 @@ codeunit 18427 "GST Stock Transfer Tests"
 
         LibraryWarehouse.PostTransferOrder(TransferHeader, true, true);
         PostedDocumentNo := GetPostedTransferReceiptNo(DocumentNo);
+        exit(PostedDocumentNo);
+    end;
+
+    local procedure CreateandPostTransferOrderForSerialItem(var TransferHeader: Record "Transfer Header";
+        var TransferLine: Record "Transfer Line"): Code[20]
+    var
+        DocumentNo: Code[20];
+        PostedDocumentNo: Code[20];
+    begin
+        LibraryWarehouse.CreateTransferHeader(
+            TransferHeader,
+            (LibraryStorage.Get(FromLocationLbl)),
+            (LibraryStorage.Get(ToLocationLbl)),
+            (LibraryStorage.Get(InTransitLocationLbl)));
+
+        CreateTransferLineWithSerialItemAndGST(TransferHeader, TransferLine, StorageBoolean.Get(AvailmentLbl));
+        DocumentNo := TransferHeader."No.";
+
+        LibraryWarehouse.PostTransferOrder(TransferHeader, true, false);
+        PostedDocumentNo := GetPostedTransferShipmentNo(DocumentNo);
         exit(PostedDocumentNo);
     end;
 
@@ -306,6 +530,30 @@ codeunit 18427 "GST Stock Transfer Tests"
             TransferLine.Validate("GST Credit", TransferLine."GST Credit"::"Non-Availment");
         TransferLine.Modify(true);
         LibraryItemTracking.CreateTransferOrderItemTracking(ReservationEntry, TransferLine, '', LotNo, TransferLine.Quantity);
+    end;
+
+    local procedure CreateTransferLineWithSerialItemAndGST(var TransferHeader: Record "Transfer Header";
+        var TransferLine: Record "Transfer Line";
+        Availment: Boolean)
+    var
+        Item: Record Item;
+        ReservationEntry: Record "Reservation Entry";
+        SerialNo, SerialNo1 : Code[50];
+    begin
+        CreateSerialItemWithInventory(Item, SerialNo, SerialNo1);
+        LibraryWarehouse.CreateTransferLine(
+             TransferHeader,
+             Transferline,
+             Item."No.",
+             2);
+        if Availment then
+            Transferline.Validate("GST Credit", Transferline."GST Credit"::Availment)
+        else
+            TransferLine.Validate("GST Credit", TransferLine."GST Credit"::"Non-Availment");
+        TransferLine.Validate("Transfer Price");
+        TransferLine.Modify(true);
+        LibraryItemTracking.CreateTransferOrderItemTracking(ReservationEntry, TransferLine, SerialNo, '', 1);
+        LibraryItemTracking.CreateTransferOrderItemTracking(ReservationEntry, TransferLine, SerialNo1, '', 1);
     end;
 
     local procedure GetPostedTransferShipmentNo(DocumentNo: Code[20]): Code[20]
@@ -363,8 +611,8 @@ codeunit 18427 "GST Stock Transfer Tests"
 
     local procedure CreateGSTSetup(
         GSTGroupType: Enum "GST Group Type";
-        IntraState: Boolean;
-        Availment: Boolean)
+                          IntraState: Boolean;
+                          Availment: Boolean)
     var
         GSTGroup: Record "GST Group";
         HSNSAC: Record "HSN/SAC";
@@ -394,9 +642,9 @@ codeunit 18427 "GST Stock Transfer Tests"
 
     local procedure CreateGSTSetupWithGSTCess(
         GSTGroupType: Enum "GST Group Type";
-        IntraState: Boolean;
-        CompCalcType: Enum "Component Calc Type";
-        Availment: Boolean)
+                          IntraState: Boolean;
+                          CompCalcType: Enum "Component Calc Type";
+                          Availment: Boolean)
     var
         GSTGroup: Record "GST Group";
         HSNSAC: Record "HSN/SAC";
@@ -825,7 +1073,7 @@ codeunit 18427 "GST Stock Transfer Tests"
                 Assert.AreNearlyEqual(-GSTAmount, GSTLedgerEntry."GST Amount", LibraryGST.GetGSTRoundingPrecision(GSTLedgerEntry."GST Component Code"),
                     StrSubstNo(GSTLEVerifyErr, GSTLedgerEntry.FieldCaption("GST Amount"), GSTLedgerEntry.TableCaption))
             else
-                Assert.AreNearlyEqual(CessAmount, GSTLedgerEntry."GST Amount", LibraryGST.GetGSTRoundingPrecision(GSTLedgerEntry."GST Component Code"),
+                Assert.AreNearlyEqual(-CessAmount, GSTLedgerEntry."GST Amount", LibraryGST.GetGSTRoundingPrecision(GSTLedgerEntry."GST Component Code"),
                     StrSubstNo(GSTLEVerifyErr, GSTLedgerEntry.FieldCaption("GST Amount"), GSTLedgerEntry.TableCaption));
 
             Assert.AreEqual(GSTLedgerEntry."Entry Type"::"Initial Entry", GSTLedgerEntry."Entry Type",
@@ -1069,6 +1317,12 @@ codeunit 18427 "GST Stock Transfer Tests"
                 TaxRates.AttributeValue11.SetValue(ComponentPerArray[9]); //Cess Factor Quantity
                 TaxRates.OK().Invoke();
             end;
+    end;
+
+    [ConfirmHandler]
+    procedure ConfirmHandlerYes(Question: Text; var Reply: Boolean)
+    begin
+        Reply := true;
     end;
 
     var

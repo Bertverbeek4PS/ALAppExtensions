@@ -15,6 +15,8 @@ codeunit 31304 "Upgrade Tag Definitions CZ"
     begin
         PerCompanyUpgradeTags.Add(GetIntrastatExcludeUpgradeTag());
         PerCompanyUpgradeTags.Add(GetIntrastatDeliveryGroupUpgradeTag());
+        PerCompanyUpgradeTags.Add(GetIntrastatDescriptionUpgradeTag());
+        PerCompanyUpgradeTags.Add(GetIntrastatMandatoryFieldsUpgradeTag());
     end;
 
     procedure GetIntrastatExcludeUpgradeTag(): Code[250]
@@ -25,5 +27,15 @@ codeunit 31304 "Upgrade Tag Definitions CZ"
     procedure GetIntrastatDeliveryGroupUpgradeTag(): Code[250]
     begin
         exit('CZ-485242-IntrastatDeliveryGroup-20230919');
+    end;
+
+    procedure GetIntrastatDescriptionUpgradeTag(): Code[250]
+    begin
+        exit('CZ-494894-IntrastatDescription-20231218');
+    end;
+
+    procedure GetIntrastatMandatoryFieldsUpgradeTag(): Code[250]
+    begin
+        exit('CZ-332149-IntrastatMandatoryFields-20250206');
     end;
 }

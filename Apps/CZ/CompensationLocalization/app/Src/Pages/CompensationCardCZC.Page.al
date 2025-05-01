@@ -162,11 +162,22 @@ page 31272 "Compensation Card CZC"
         }
         area(factboxes)
         {
+#if not CLEAN25
             part("Attached Documents"; "Document Attachment Factbox")
             {
+                ObsoleteTag = '25.0';
+                ObsoleteState = Pending;
+                ObsoleteReason = 'The "Document Attachment FactBox" has been replaced by "Doc. Attachment List Factbox", which supports multiple files upload.';
                 ApplicationArea = All;
                 Caption = 'Attachments';
-                SubPageLink = "Table ID" = const(31272), "No." = field("No.");
+                SubPageLink = "Table ID" = const(Database::"Compensation Header CZC"), "No." = field("No.");
+            }
+#endif
+            part("Attached Documents List"; "Doc. Attachment List Factbox")
+            {
+                ApplicationArea = All;
+                Caption = 'Documents';
+                SubPageLink = "Table ID" = const(Database::"Compensation Header CZC"), "No." = field("No.");
             }
             part(PendingApprovalFactBox; "Pending Approval FactBox")
             {
@@ -682,10 +693,8 @@ page 31272 "Compensation Card CZC"
     local procedure DetermineCompensationCZCSeriesNo(): Code[20]
     var
         CompensationsSetupCZC: Record "Compensations Setup CZC";
-        CompensationHeaderCZC: Record "Compensation Header CZC";
     begin
         CompensationsSetupCZC.Get();
-        DocumentNoVisibility.CheckNumberSeries(CompensationHeaderCZC, CompensationsSetupCZC."Compensation Nos.", CompensationHeaderCZC.FieldNo("No."));
         exit(CompensationsSetupCZC."Compensation Nos.");
     end;
 

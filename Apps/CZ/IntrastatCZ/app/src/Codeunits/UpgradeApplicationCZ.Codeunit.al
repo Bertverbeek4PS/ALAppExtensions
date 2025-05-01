@@ -75,7 +75,9 @@ codeunit 31306 "Upgrade Application CZ"
         UpgradeTransferHeader();
         UpgradeTransferReceiptHeader();
         UpgradeTransferShipmentHeader();
-        UpgradeIntrastatDeliveryGroup()
+        UpgradeIntrastatDeliveryGroup();
+        UpgradeIntrastatDescription();
+        UpgradeMandatoryFields();
     end;
 
     local procedure UpgradeDirectTransHeader()
@@ -436,5 +438,46 @@ codeunit 31306 "Upgrade Application CZ"
         end;
 
         UpgradeTag.SetUpgradeTag(UpgradeTagDefinitionsCZ.GetIntrastatDeliveryGroupUpgradeTag());
+    end;
+
+    local procedure UpgradeIntrastatDescription()
+    var
+        DataExchFieldMapping: Record "Data Exch. Field Mapping";
+        IntrastatReportLine: Record "Intrastat Report Line";
+        TransformationRule: Record "Transformation Rule";
+        IntrastatTransformationCZ: Codeunit "Intrastat Transformation CZ";
+    begin
+        if UpgradeTag.HasUpgradeTag(UpgradeTagDefinitionsCZ.GetIntrastatDescriptionUpgradeTag()) then
+            exit;
+
+        if DataExchFieldMapping.Get('INTRA-2022-CZ', 'DEFAULT', Database::"Intrastat Report Line", 15, IntrastatReportLine.FieldNo("Tariff Description")) then begin
+            TransformationRule.InsertRec(
+                IntrastatTransformationCZ.GetIntrastatItemDescriptionCode(),
+                IntrastatTransformationCZ.GetIntrastatItemDescriptionDescCode(),
+                TransformationRule."Transformation Type"::Substring.AsInteger(), 1, 80, '', '');
+
+            DataExchFieldMapping.Validate("Transformation Rule", IntrastatTransformationCZ.GetIntrastatItemDescriptionCode());
+            DataExchFieldMapping.Modify();
+        end;
+
+        UpgradeTag.SetUpgradeTag(UpgradeTagDefinitionsCZ.GetIntrastatDescriptionUpgradeTag());
+    end;
+
+    local procedure UpgradeMandatoryFields()
+    var
+        IntrastatReportSetup: Record "Intrastat Report Setup";
+    begin
+        if UpgradeTag.HasUpgradeTag(UpgradeTagDefinitionsCZ.GetIntrastatMandatoryFieldsUpgradeTag()) then
+            exit;
+
+        if IntrastatReportSetup.Get() then begin
+            IntrastatReportSetup."Transaction Type Mandatory" := IntrastatReportSetup."Transaction Type Mandatory CZ";
+            IntrastatReportSetup."Transaction Spec. Mandatory" := IntrastatReportSetup."Transaction Spec. Mandatory CZ";
+            IntrastatReportSetup."Transport Method Mandatory" := IntrastatReportSetup."Transport Method Mandatory CZ";
+            IntrastatReportSetup."Shipment Method Mandatory" := IntrastatReportSetup."Shipment Method Mandatory CZ";
+            IntrastatReportSetup.Modify()
+        end;
+
+        UpgradeTag.SetUpgradeTag(UpgradeTagDefinitionsCZ.GetIntrastatMandatoryFieldsUpgradeTag());
     end;
 }

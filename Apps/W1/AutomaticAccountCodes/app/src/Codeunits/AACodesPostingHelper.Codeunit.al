@@ -13,7 +13,9 @@ using Microsoft.Finance.GeneralLedger.Posting;
 using Microsoft.Finance.GeneralLedger.Setup;
 using Microsoft.Finance.ReceivablesPayables;
 using Microsoft.Purchases.Document;
+using Microsoft.Purchases.Posting;
 using Microsoft.Sales.Document;
+using Microsoft.Sales.Posting;
 
 codeunit 4850 "AA Codes Posting Helper"
 {
@@ -69,6 +71,7 @@ codeunit 4850 "AA Codes Posting Helper"
         GenJnlCheckLine: Codeunit "Gen. Jnl.-Check Line";
         NoOfAutoAccounts: Decimal;
         TotalAmount: Decimal;
+        TotalAltAmount: Decimal;
         SourceCurrBaseAmount: Decimal;
         AccLine: Integer;
     begin
@@ -113,9 +116,11 @@ codeunit 4850 "AA Codes Posting Helper"
                 CopyDimensionFromAutoAccLine(GenJnlLine2, AutomaticAccountLine);
                 AccLine := AccLine + 1;
                 TotalAmount := TotalAmount + GenJnlLine2.Amount;
+                TotalAltAmount := TotalAltAmount + GenJnlLine2."Source Currency Amount";
                 if (AccLine = NoOfAutoAccounts) and (TotalAmount <> 0) then
                     GenJnlLine2.Validate(Amount, GenJnlLine2.Amount - TotalAmount);
-
+                if (AccLine = NoOfAutoAccounts) and (TotalAltAmount <> 0) then
+                    GenJnlLine2.Validate("Source Currency Amount", GenJnlLine2."Source Currency Amount" - TotalAltAmount);
                 GenJnlCheckLine.RunCheck(GenJnlLine2);
 
                 sender.InitGLEntry(GenJnlLine2, GLEntry,
@@ -187,13 +192,13 @@ codeunit 4850 "AA Codes Posting Helper"
                 GenJournalLine."Automatic Account Group" := '';
     end;
 
-    [EventSubscriber(ObjectType::Table, Database::"Invoice Posting Buffer", 'OnAfterPrepareSales', '', false, false)]
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Sales Post Invoice Events", 'OnAfterPrepareInvoicePostingBuffer', '', false, false)]
     local procedure OnAfterInvPostBufferPrepareSales(var SalesLine: Record "Sales Line"; var InvoicePostingBuffer: Record "Invoice Posting Buffer")
     begin
         InvoicePostingBuffer."Automatic Account Group" := SalesLine."Automatic Account Group";
     end;
 
-    [EventSubscriber(ObjectType::Table, Database::"Invoice Posting Buffer", 'OnAfterPreparePurchase', '', false, false)]
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Purch. Post Invoice Events", 'OnAfterPrepareInvoicePostingBuffer', '', false, false)]
     local procedure OnAfterInvPostBufferPreparePurchase(var PurchaseLine: Record "Purchase Line"; var InvoicePostingBuffer: Record "Invoice Posting Buffer")
     begin
         InvoicePostingBuffer."Automatic Account Group" := PurchaseLine."Automatic Account Group";

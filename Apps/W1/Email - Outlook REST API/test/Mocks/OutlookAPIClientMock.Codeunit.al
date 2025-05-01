@@ -3,7 +3,7 @@
 // Licensed under the MIT License. See License.txt in the project root for license information.
 // ------------------------------------------------------------------------------------------------
 
-codeunit 139754 "Outlook API Client Mock" implements "Email - Outlook API Client"
+codeunit 139754 "Outlook API Client Mock" implements "Email - Outlook API Client v2"
 {
     SingleInstance = true;
 
@@ -12,14 +12,15 @@ codeunit 139754 "Outlook API Client Mock" implements "Email - Outlook API Client
         EmailAddress: Text[250];
         AccountName: Text[250];
 
-    internal procedure GetAccountInformation(AccessToken: Text; var Email: Text[250]; var Name: Text[250]): Boolean
+
+    internal procedure GetAccountInformation(AccessToken: SecretText; var Email: Text[250]; var Name: Text[250]): Boolean
     begin
         Email := EmailAddress;
         Name := AccountName;
         exit(true);
     end;
 
-    internal procedure SendEmail(AccessToken: Text; MessageJson: JsonObject)
+    internal procedure SendEmail(AccessToken: SecretText; MessageJson: JsonObject)
     begin
         Message := MessageJson;
     end;

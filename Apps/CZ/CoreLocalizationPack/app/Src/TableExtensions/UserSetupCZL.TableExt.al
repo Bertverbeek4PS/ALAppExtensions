@@ -1,11 +1,10 @@
-﻿// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License. See License.txt in the project root for license information.
 // ------------------------------------------------------------------------------------------------
 namespace System.Security.User;
 
 using Microsoft.Finance.Dimension;
-using Microsoft.Finance.GeneralLedger.Setup;
 using Microsoft.HumanResources.Employee;
 
 tableextension 11717 "User Setup CZL" extends "User Setup"
@@ -52,32 +51,24 @@ tableextension 11717 "User Setup CZL" extends "User Setup"
             Caption = 'Allow Posting to Closed Period';
             DataClassification = CustomerContent;
         }
+#if not CLEANSCHEMA27
         field(11778; "Allow VAT Posting From CZL"; Date)
         {
             Caption = 'Allow VAT Posting From';
             DataClassification = CustomerContent;
-
-            trigger OnValidate()
-            var
-                GLSetup: Record "General Ledger Setup";
-            begin
-                GLSetup.Get();
-                GLSetup.TestIsVATDateEnabledCZL();
-            end;
+            ObsoleteState = Removed;
+            ObsoleteTag = '27.0';
+            ObsoleteReason = 'Replaced by "Allow VAT Date From" field.';
         }
         field(11779; "Allow VAT Posting To CZL"; Date)
         {
             Caption = 'Allow VAT Posting To';
             DataClassification = CustomerContent;
-
-            trigger OnValidate()
-            var
-                GLSetup: Record "General Ledger Setup";
-            begin
-                GLSetup.Get();
-                GLSetup.TestIsVATDateEnabledCZL();
-            end;
+            ObsoleteState = Removed;
+            ObsoleteTag = '27.0';
+            ObsoleteReason = 'Replaced by "Allow VAT Date To" field.';
         }
+#endif
         field(11780; "Allow Complete Job CZL"; Boolean)
         {
             Caption = 'Allow Complete Job';

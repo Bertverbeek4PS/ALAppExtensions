@@ -1,4 +1,4 @@
-﻿// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License. See License.txt in the project root for license information.
 // ------------------------------------------------------------------------------------------------
@@ -25,10 +25,12 @@ table 11793 "Company Official CZL"
             DataClassification = CustomerContent;
 
             trigger OnValidate()
+            var
+                NoSeries: Codeunit "No. Series";
             begin
                 if "No." <> xRec."No." then begin
                     StatutoryReportingSetupCZL.Get();
-                    NoSeriesManagement.TestManual(StatutoryReportingSetupCZL."Company Official Nos.");
+                    NoSeries.TestManual(StatutoryReportingSetupCZL."Company Official Nos.");
                     "No. Series" := '';
                 end;
             end;
@@ -185,7 +187,7 @@ table 11793 "Company Official CZL"
                     "Country/Region Code" := Employee."Country/Region Code";
                     "Phone No." := Employee."Phone No.";
                     "Mobile Phone No." := Employee."Mobile Phone No.";
-                    "E-Mail" := Employee."E-Mail";
+                    "E-Mail" := Employee."Company E-Mail";
                     "Fax No." := Employee."Fax No.";
                     "Employee No." := Employee."No.";
                     "Privacy Blocked" := Employee."Privacy Blocked";
@@ -228,11 +230,21 @@ table 11793 "Company Official CZL"
         }
     }
     trigger OnInsert()
+    var
+        CompanyOfficial: Record "Company Official CZL";
+        NoSeries: Codeunit "No. Series";
     begin
         if "No." = '' then begin
             StatutoryReportingSetupCZL.Get();
             StatutoryReportingSetupCZL.TestField("Company Official Nos.");
-            NoSeriesManagement.InitSeries(StatutoryReportingSetupCZL."Company Official Nos.", xRec."No. Series", 0D, "No.", "No. Series");
+                "No. Series" := StatutoryReportingSetupCZL."Company Official Nos.";
+                if NoSeries.AreRelated("No. Series", xRec."No. Series") then
+                    "No. Series" := xRec."No. Series";
+                "No." := NoSeries.GetNextNo("No. Series");
+                CompanyOfficial.ReadIsolation(ReadIsolation::ReadUncommitted);
+                CompanyOfficial.SetLoadFields("No.");
+                while CompanyOfficial.Get("No.") do
+                    "No." := NoSeries.GetNextNo("No. Series");
         end;
     end;
 
@@ -251,17 +263,16 @@ table 11793 "Company Official CZL"
         Employee: Record Employee;
         PostCode: Record "Post Code";
         CompanyOfficialCZL: Record "Company Official CZL";
-        NoSeriesManagement: Codeunit NoSeriesManagement;
 
     procedure AssistEdit(OldCompanyOfficialCZL: Record "Company Official CZL"): Boolean
+    var
+        NoSeries: Codeunit "No. Series";
     begin
         CompanyOfficialCZL := Rec;
         StatutoryReportingSetupCZL.Get();
         StatutoryReportingSetupCZL.TestField("Company Official Nos.");
-        if NoSeriesManagement.SelectSeries(StatutoryReportingSetupCZL."Company Official Nos.", OldCompanyOfficialCZL."No. Series", OldCompanyOfficialCZL."No. Series") then begin
-            StatutoryReportingSetupCZL.Get();
-            StatutoryReportingSetupCZL.TestField("Company Official Nos.");
-            NoSeriesManagement.SetSeries(OldCompanyOfficialCZL."No.");
+        if NoSeries.LookupRelatedNoSeries(StatutoryReportingSetupCZL."Company Official Nos.", OldCompanyOfficialCZL."No. Series", OldCompanyOfficialCZL."No. Series") then begin
+            OldCompanyOfficialCZL."No." := NoSeries.GetNextNo(OldCompanyOfficialCZL."No. Series");
             Rec := CompanyOfficialCZL;
             exit(true);
         end;

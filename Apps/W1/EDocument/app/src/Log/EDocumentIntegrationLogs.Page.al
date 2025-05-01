@@ -11,6 +11,7 @@ page 6128 "E-Document Integration Logs"
     SourceTable = "E-Document Integration Log";
     PageType = List;
     Editable = false;
+    SourceTableView = sorting("Entry No.") order(descending);
 
     layout
     {
@@ -30,7 +31,7 @@ page 6128 "E-Document Integration Logs"
                     {
                         ToolTip = 'Specifies the service code for the document.';
                     }
-                    field(URL; Rec.URL)
+                    field(URL; Rec."Request URL")
                     {
                         ToolTip = 'Specifies the integration url used to send the document.';
                     }

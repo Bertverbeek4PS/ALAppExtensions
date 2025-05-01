@@ -1,11 +1,11 @@
 namespace Microsoft.Finance.Latepayment;
 
 using System.AI;
-using System.Environment;
 using System.Utilities;
 using System.Privacy;
 table 1950 "LP Machine Learning Setup"
 {
+    DataClassification = CustomerContent;
     ReplicateData = false;
     Permissions = TableData "LP Machine Learning Setup" = I;
     fields
@@ -26,9 +26,11 @@ table 1950 "LP Machine Learning Setup"
                     if "Standard Model Quality" = 0 then begin // ensure that the model quality of the standard model is correctly evaluated for data on this company if it has never been tried before
                         LPModelManagement.EvaluateModel("Selected Model"::Standard, false);
                         GetSingleInstance(); // to refresh the standard model quality after evaluation
+                        Session.LogSecurityAudit(LatePaymentPredictionTxt, SecurityOperationResult::Success, LatePaymentPredcitionEnabledTxt, AuditCategory::PolicyManagement);
                     end;
                     CheckModelQuality();
-                end;
+                end else
+                    Session.LogSecurityAudit(LatePaymentPredictionTxt, SecurityOperationResult::Success, LatePaymentPredcitionDisabledTxt, AuditCategory::PolicyManagement);
             end;
         }
 
@@ -70,9 +72,12 @@ table 1950 "LP Machine Learning Setup"
             trigger OnValidate()
             var
                 CustomerConsentMgt: Codeunit "Customer Consent Mgt.";
+                LatePaymentPredictionConsentProvidedLbl: Label 'Late Payment Prediction - consent provided by UserSecurityId %1.', Locked = true;
             begin
                 if not xRec."Use My Model Credentials" and Rec."Use My Model Credentials" then
                     Rec."Use My Model Credentials" := CustomerConsentMgt.ConfirmUserConsentToMicrosoftService();
+                if Rec."Use My Model Credentials" then
+                    Session.LogAuditMessage(StrSubstNo(LatePaymentPredictionConsentProvidedLbl, UserSecurityId()), SecurityOperationResult::Success, AuditCategory::ApplicationManagement, 4, 0);
             end;
         }
 
@@ -96,15 +101,6 @@ table 1950 "LP Machine Learning Setup"
                 AzureMLConnector.ValidateApiUrl("Custom API Key");
             end;
         }
-
-        field(11; "Exact Invoice No OnLastML"; Integer)
-        {
-            Editable = false;
-            ObsoleteState = Removed;
-            ObsoleteReason = 'Discontinued because of performance refactoring. Use the field Posting Date OnLastML instead.';
-            ObsoleteTag = '18.0';
-        }
-
         field(12; "OverestimatedInvNo OnLastReset"; Integer)
         {
             Editable = false;
@@ -148,6 +144,8 @@ table 1950 "LP Machine Learning Setup"
     var
         LPModelManagement: Codeunit "LP Model Management";
     begin
+        if not Rec.ReadPermission() then
+            exit;
         if Get() then
             exit;
 
@@ -160,16 +158,15 @@ table 1950 "LP Machine Learning Setup"
 
     procedure GetModelAsText(ForModel: Option) Content: Text
     var
-        MediaResources: Record "Media Resources";
         TempBlob: Codeunit "Temp Blob";
         InStream: InStream;
     begin
         case ForModel of
             "Selected Model"::Standard:
                 begin
-                    if not MediaResources.Get('LatePaymentStandardModel.txt') then
-                        exit;
-                    TempBlob.FromRecord(MediaResources, MediaResources.FieldNo(Blob));
+                    NavApp.GetResource('LatePaymentStandardModel.txt', InStream);
+                    InStream.Read(Content);
+                    exit;
                 end;
             "Selected Model"::My:
                 TempBlob.FromRecord(Rec, FieldNo("My Model"));
@@ -247,7 +244,6 @@ table 1950 "LP Machine Learning Setup"
         exit(CurrentDateTime() - "Last Background Analysis" < 7 * 24 * 60 * 60 * 1000);
     end;
 
-    [NonDebuggable]
     [Scope('OnPrem')]
     procedure SaveApiUri(ApiUriText: Text[250])
     var
@@ -257,12 +253,12 @@ table 1950 "LP Machine Learning Setup"
         if "Custom API Uri" <> '' then
             evaluate(ApiUriKeyGUID, "Custom API Uri");
 
-        if IsNullGuid(ApiUriKeyGUID) OR NOT IsolatedStorage.Contains(ApiUriKeyGUID, DataScope::Company) then begin
-            ApiUriKeyGUID := FORMAT(CreateGuid());
+        if IsNullGuid(ApiUriKeyGUID) or not IsolatedStorage.Contains(ApiUriKeyGUID, DataScope::Company) then begin
+            ApiUriKeyGUID := Format(CreateGuid());
             "Custom API Uri" := ApiUriKeyGUID;
         end;
 
-        IF NOT EncryptionEnabled() THEN
+        if not EncryptionEnabled() then
             IsolatedStorage.Set(ApiUriKeyGUID, ApiUriText, DataScope::Company)
         else
             IsolatedStorage.SetEncrypted(ApiUriKeyGUID, ApiUriText, DataScope::Company);
@@ -271,7 +267,7 @@ table 1950 "LP Machine Learning Setup"
     [NonDebuggable]
     [Scope('OnPrem')]
     procedure GetApiUri(): Text[250]
-    VAR
+    var
         ApiUriKeyGUID: Guid;
         ApiUriValue: Text;
     begin
@@ -282,41 +278,41 @@ table 1950 "LP Machine Learning Setup"
                 exit(CopyStr(ApiUriValue, 1, 250));
     end;
 
-    [NonDebuggable]
     [Scope('OnPrem')]
-    procedure SaveApiKey(ApiKeyText: Text[200])
-    VAR
+    procedure SaveApiKey(ApiKeyText: SecretText)
+    var
         ApiKeyKeyGUID: Guid;
     begin
-        ApiKeyText := CopyStr(DelChr(ApiKeyText, '=', ' '), 1, 200);
         if "Custom API Key" <> '' then
             evaluate(ApiKeyKeyGUID, "Custom API Key");
-        if IsNullGuid(ApiKeyKeyGUID) OR NOT IsolatedStorage.Contains(ApiKeyKeyGUID, DataScope::Company) then begin
+        if IsNullGuid(ApiKeyKeyGUID) or not IsolatedStorage.Contains(ApiKeyKeyGUID, DataScope::Company) then begin
             ApiKeyKeyGUID := FORMAT(CreateGuid());
             "Custom API Key" := ApiKeyKeyGUID;
         end;
 
-        IF not EncryptionEnabled() then
+        if not EncryptionEnabled() then
             IsolatedStorage.Set(ApiKeyKeyGUID, ApiKeyText, DataScope::Company)
         else
             IsolatedStorage.SetEncrypted(ApiKeyKeyGUID, ApiKeyText, DataScope::Company);
     end;
 
-    [NonDebuggable]
     [Scope('OnPrem')]
-    procedure GetApiKey(): Text[200]
-    VAR
+    procedure GetApiKeyAsSecret(): SecretText
+    var
         ApiKeyKeyGUID: GUID;
-        ApiValue: Text;
+        ApiValue: SecretText;
     begin
         if "Custom API Key" <> '' then
             evaluate(ApiKeyKeyGUID, "Custom API Key");
-        if NOT IsNullGuid(ApiKeyKeyGUID) then
+        if not IsNullGuid(ApiKeyKeyGUID) then
             if IsolatedStorage.Get(FORMAT(ApiKeyKeyGUID), DataScope::Company, ApiValue) then
-                exit(CopyStr(ApiValue, 1, 200));
+                exit(ApiValue);
     end;
 
     var
         CurrentModelLowerQualityThanDesiredErr: Label 'You cannot use the model because its quality of %1 is below the value in the Model Quality Threshold field. That means its predictions are unlikely to meet your accuracy requirements. You can evaluate the model again to confirm its quality. To use the model anyway, enter a value that is less than or equal to %1 in the Model Quality Threshold field.', Comment = '%1 = current model quality (decimal)';
         CurrentModelDoesNotExistErr: Label 'Cannot use the model because it does not exist. Try training a new model.';
+        LatePaymentPredictionTxt: Label 'Late Payment Prediction', Locked = true;
+        LatePaymentPredcitionEnabledTxt: Label 'Late Payment Prediction enabled', Locked = true;
+        LatePaymentPredcitionDisabledTxt: Label 'Late Payment Prediction disabled', Locked = true;
 }

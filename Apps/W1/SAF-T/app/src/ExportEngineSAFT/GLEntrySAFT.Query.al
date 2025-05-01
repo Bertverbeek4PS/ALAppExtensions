@@ -11,7 +11,7 @@ query 5284 "G/L Entry SAF-T"
     QueryType = Normal;
     Access = Internal;
     DataAccessIntent = ReadOnly;
-    OrderBy = ascending(Transaction_No_);
+    OrderBy = ascending(Document_No_, Posting_Date);
 
     elements
     {
@@ -37,6 +37,7 @@ query 5284 "G/L Entry SAF-T"
             column(VAT_Bus__Posting_Group; "VAT Bus. Posting Group") { }
             column(VAT_Prod__Posting_Group; "VAT Prod. Posting Group") { }
             column(Last_Modified_DateTime; "Last Modified DateTime") { }
+            column(Amount; Amount) { }
             column(Debit_Amount; "Debit Amount") { }
             column(Credit_Amount; "Credit Amount") { }
         }

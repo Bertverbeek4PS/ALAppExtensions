@@ -6,8 +6,10 @@ namespace Microsoft.Finance.AdvancePayments;
 
 using Microsoft.CashFlow.Setup;
 using Microsoft.CashFlow.Worksheet;
+using Microsoft.Purchases.Document;
 using Microsoft.Purchases.Vendor;
 using Microsoft.Sales.Customer;
+using Microsoft.Sales.Document;
 
 reportextension 31001 "Suggest Worksheet Lines CZZ" extends "Suggest Worksheet Lines"
 {
@@ -85,41 +87,45 @@ reportextension 31001 "Suggest Worksheet Lines CZZ" extends "Suggest Worksheet L
         modify("Sales Line")
         {
             trigger OnAfterAfterGetRecord()
-            var
-                TempAdvanceLetterApplication: Record "Advance Letter Application CZZ" temporary;
             begin
                 if not TempCFWorksheetLine.Find() then
                     exit;
-                if "Document Type" = "Document Type"::Order then
-                    AdvanceLetterApplication.GetAssignedAdvance("Adv. Letter Usage Doc.Type CZZ"::"Sales Order", "Document No.", TempAdvanceLetterApplication)
-                else
-                    AdvanceLetterApplication.GetAssignedAdvance("Adv. Letter Usage Doc.Type CZZ"::"Sales Invoice", "Document No.", TempAdvanceLetterApplication);
-                TempAdvanceLetterApplication.CalcSums("Amount (LCY)");
-                TempCFWorksheetLine."Amount (LCY)" -= TempAdvanceLetterApplication."Amount (LCY)";
-                if TempCFWorksheetLine."Amount (LCY)" = 0 then
-                    TempCFWorksheetLine.Delete()
-                else
-                    TempCFWorksheetLine.Modify();
+
+                if (PreviousSalesHeaderCZZ."Document Type" <> SalesHeader."Document Type") or
+                   (PreviousSalesHeaderCZZ."No." <> SalesHeader."No.")
+                then begin
+                    if PreviousSalesHeaderCZZ.HasAdvanceLetterLinkedCZZ() then
+                        InsertCFLineForSalesAdvanceLetterDeduction(PreviousSalesHeaderCZZ);
+                    PreviousSalesHeaderCZZ := SalesHeader;
+                end;
+            end;
+
+            trigger OnAfterPostDataItem()
+            begin
+                if PreviousSalesHeaderCZZ.HasAdvanceLetterLinkedCZZ() then
+                    InsertCFLineForSalesAdvanceLetterDeduction(PreviousSalesHeaderCZZ);
             end;
         }
         modify("Purchase Line")
         {
             trigger OnAfterAfterGetRecord()
-            var
-                TempAdvanceLetterApplication: Record "Advance Letter Application CZZ" temporary;
             begin
                 if not TempCFWorksheetLine.Find() then
                     exit;
-                if "Document Type" = "Document Type"::Order then
-                    AdvanceLetterApplication.GetAssignedAdvance("Adv. Letter Usage Doc.Type CZZ"::"Purchase Order", "Document No.", TempAdvanceLetterApplication)
-                else
-                    AdvanceLetterApplication.GetAssignedAdvance("Adv. Letter Usage Doc.Type CZZ"::"Purchase Invoice", "Document No.", TempAdvanceLetterApplication);
-                TempAdvanceLetterApplication.CalcSums("Amount (LCY)");
-                TempCFWorksheetLine."Amount (LCY)" += TempAdvanceLetterApplication."Amount (LCY)";
-                if TempCFWorksheetLine."Amount (LCY)" = 0 then
-                    TempCFWorksheetLine.Delete()
-                else
-                    TempCFWorksheetLine.Modify();
+
+                if (PreviousPurchaseHeaderCZZ."Document Type" <> PurchHeader."Document Type") or
+                   (PreviousPurchaseHeaderCZZ."No." <> PurchHeader."No.")
+                then begin
+                    if PreviousPurchaseHeaderCZZ.HasAdvanceLetterLinkedCZZ() then
+                        InsertCFLineForPurchaseAdvanceLetterDeduction(PreviousPurchaseHeaderCZZ);
+                    PreviousPurchaseHeaderCZZ := PurchHeader;
+                end;
+            end;
+
+            trigger OnAfterPostDataItem()
+            begin
+                if PreviousPurchaseHeaderCZZ.HasAdvanceLetterLinkedCZZ() then
+                    InsertCFLineForPurchaseAdvanceLetterDeduction(PreviousPurchaseHeaderCZZ);
             end;
         }
     }
@@ -156,20 +162,106 @@ reportextension 31001 "Suggest Worksheet Lines CZZ" extends "Suggest Worksheet L
     trigger OnPreReport()
     begin
         UnbindSubscription(SuggWkshLinesHandlerCZZ);
-        CashFlowSetup.Get();
     end;
 
     var
-        AdvanceLetterApplication: Record "Advance Letter Application CZZ";
         CustomerCZZ: Record Customer;
-        CashFlowSetup: Record "Cash Flow Setup";
         VendorCZZ: Record Vendor;
+        PreviousPurchaseHeaderCZZ: Record "Purchase Header";
+        PreviousSalesHeaderCZZ: Record "Sales Header";
         SuggWkshLinesHandlerCZZ: Codeunit "Sugg. Wksh. Lines Handler CZZ";
         IsSalesAdvanceLettersConsideredCZZ: Boolean;
         IsPurchaseAdvanceLettersConsideredCZZ: Boolean;
         SalesAdvancesCZZMsg: Label 'Sales Advances';
         PurchaseAdvancesCZZMsg: Label 'Purchase Advances';
+        PurchaseDocumentDescriptionCZZTxt: Label 'Purchase %1 - %2 %3', Comment = '%1 = Source Document Type (e.g. Invoice), %2 = Due Date, %3 = Source Name (e.g. Vendor Name). Example: Purchase Invoice - 04-05-18 The Cannon Group PLC';
+        SalesDocumentDescriptionCZZTxt: Label 'Sales %1 - %2 %3', Comment = '%1 = Source Document Type (e.g. Invoice), %2 = Due Date, %3 = Source Name (e.g. Customer Name). Example: Sales Invoice - 04-05-18 The Cannon Group PLC';
         ThreePlaceholdersTxt: Label '%1 %2 %3', Comment = '%1 = table caption, %2 = name of customer/vendor, %3 = date';
+
+    local procedure CalcAssignedAdvanceAmount(SalesHeader: Record "Sales Header"): Decimal
+    begin
+        exit(CalcAssignedAdvanceAmount(SalesHeader.GetAdvLetterUsageDocTypeCZZ(), SalesHeader."No."));
+    end;
+
+    local procedure CalcAssignedAdvanceAmount(PurchaseHeader: Record "Purchase Header"): Decimal
+    begin
+        exit(CalcAssignedAdvanceAmount(PurchaseHeader.GetAdvLetterUsageDocTypeCZZ(), PurchaseHeader."No."));
+    end;
+
+    local procedure CalcAssignedAdvanceAmount(AdvLetterUsageDocTypeCZZ: Enum "Adv. Letter Usage Doc.Type CZZ"; DocumentNo: Code[20]): Decimal
+    var
+        TempAdvanceLetterApplication: Record "Advance Letter Application CZZ" temporary;
+    begin
+        TempAdvanceLetterApplication.GetAssignedAdvance(AdvLetterUsageDocTypeCZZ, DocumentNo, TempAdvanceLetterApplication);
+        TempAdvanceLetterApplication.CalcSums("Amount (LCY)");
+        exit(TempAdvanceLetterApplication."Amount (LCY)");
+    end;
+
+    local procedure InsertCFLineForSalesAdvanceLetterDeduction(SalesHeader: Record "Sales Header")
+    var
+        CashFlowWorksheetLine: Record "Cash Flow Worksheet Line";
+    begin
+        CashFlowWorksheetLine.Init();
+        CashFlowWorksheetLine."Document Type" := CashFlowWorksheetLine."Document Type"::Invoice;
+        CashFlowWorksheetLine."Document Date" := SalesHeader."Document Date";
+        CashFlowWorksheetLine."Source Type" := CashFlowWorksheetLine."Source Type"::"Sales Orders";
+        CashFlowWorksheetLine."Source No." := SalesHeader."No.";
+        CashFlowWorksheetLine."Shortcut Dimension 1 Code" := SalesHeader."Shortcut Dimension 1 Code";
+        CashFlowWorksheetLine."Shortcut Dimension 2 Code" := SalesHeader."Shortcut Dimension 2 Code";
+        CashFlowWorksheetLine."Dimension Set ID" := SalesHeader."Dimension Set ID";
+        CashFlowWorksheetLine."Cash Flow Account No." := CFSetup."Sales Order CF Account No.";
+        CashFlowWorksheetLine.Description :=
+          CopyStr(
+            StrSubstNo(
+              SalesDocumentDescriptionCZZTxt,
+              SalesHeader."Document Type",
+              Format(SalesHeader."Order Date"),
+              SalesHeader."Sell-to Customer Name"),
+            1, MaxStrLen(CashFlowWorksheetLine.Description));
+        SetCashFlowDate(CashFlowWorksheetLine, SalesHeader."Due Date");
+        CashFlowWorksheetLine."Document No." := SalesHeader."No.";
+        CashFlowWorksheetLine."Amount (LCY)" := -CalcAssignedAdvanceAmount(SalesHeader);
+
+        if "Cash Flow Forecast"."Consider CF Payment Terms" and (Customer."Cash Flow Payment Terms Code" <> '') then
+            CashFlowWorksheetLine."Payment Terms Code" := Customer."Cash Flow Payment Terms Code"
+        else
+            CashFlowWorksheetLine."Payment Terms Code" := SalesHeader."Payment Terms Code";
+
+        InsertTempCFWorksheetLine(CashFlowWorksheetLine, 0);
+    end;
+
+    local procedure InsertCFLineForPurchaseAdvanceLetterDeduction(PurchaseHeader: Record "Purchase Header")
+    var
+        CashFlowWorksheetLine: Record "Cash Flow Worksheet Line";
+    begin
+        CashFlowWorksheetLine.Init();
+        CashFlowWorksheetLine."Document Type" := CashFlowWorksheetLine."Document Type"::Invoice;
+        CashFlowWorksheetLine."Document Date" := PurchaseHeader."Document Date";
+        CashFlowWorksheetLine."Source Type" := CashFlowWorksheetLine."Source Type"::"Purchase Orders";
+        CashFlowWorksheetLine."Source No." := PurchaseHeader."No.";
+        CashFlowWorksheetLine."Shortcut Dimension 1 Code" := PurchaseHeader."Shortcut Dimension 1 Code";
+        CashFlowWorksheetLine."Shortcut Dimension 2 Code" := PurchaseHeader."Shortcut Dimension 2 Code";
+        CashFlowWorksheetLine."Dimension Set ID" := PurchaseHeader."Dimension Set ID";
+        CashFlowWorksheetLine."Cash Flow Account No." := CFSetup."Purch. Order CF Account No.";
+        CashFlowWorksheetLine.Description :=
+          CopyStr(
+            StrSubstNo(
+              PurchaseDocumentDescriptionCZZTxt,
+              PurchaseHeader."Document Type",
+              Format(PurchaseHeader."Order Date"),
+              PurchaseHeader."Buy-from Vendor Name"),
+            1, MaxStrLen(CashFlowWorksheetLine.Description));
+        SetCashFlowDate(CashFlowWorksheetLine, PurchaseHeader."Due Date");
+        CashFlowWorksheetLine."Document No." := PurchaseHeader."No.";
+        CashFlowWorksheetLine."Amount (LCY)" := CalcAssignedAdvanceAmount(PurchaseHeader);
+
+        if "Cash Flow Forecast"."Consider CF Payment Terms" and (Vendor."Cash Flow Payment Terms Code" <> '') then
+            CashFlowWorksheetLine."Payment Terms Code" := Vendor."Cash Flow Payment Terms Code"
+        else
+            CashFlowWorksheetLine."Payment Terms Code" := PurchaseHeader."Payment Terms Code";
+
+        InsertTempCFWorksheetLine(CashFlowWorksheetLine, 0);
+    end;
 
     local procedure InsertCFLineForSalesAdvanceLetterHeader()
     var
@@ -190,7 +282,7 @@ reportextension 31001 "Suggest Worksheet Lines CZZ" extends "Suggest Worksheet L
         CashFlowWorksheetLine."Shortcut Dimension 1 Code" := "Sales Adv. Letter Header CZZ"."Shortcut Dimension 1 Code";
         CashFlowWorksheetLine."Shortcut Dimension 2 Code" := "Sales Adv. Letter Header CZZ"."Shortcut Dimension 2 Code";
         CashFlowWorksheetLine."Dimension Set ID" := "Sales Adv. Letter Header CZZ"."Dimension Set ID";
-        CashFlowWorksheetLine."Cash Flow Account No." := CashFlowSetup."S. Adv. Letter CF Acc. No. CZZ";
+        CashFlowWorksheetLine."Cash Flow Account No." := CFSetup."S. Adv. Letter CF Acc. No. CZZ";
         CashFlowWorksheetLine.Description := CopyStr(
             StrSubstNo(
                 ThreePlaceholdersTxt,
@@ -224,7 +316,7 @@ reportextension 31001 "Suggest Worksheet Lines CZZ" extends "Suggest Worksheet L
         CashFlowWorksheetLine."Shortcut Dimension 1 Code" := "Purch. Adv. Letter Header CZZ"."Shortcut Dimension 1 Code";
         CashFlowWorksheetLine."Shortcut Dimension 2 Code" := "Purch. Adv. Letter Header CZZ"."Shortcut Dimension 2 Code";
         CashFlowWorksheetLine."Dimension Set ID" := "Purch. Adv. Letter Header CZZ"."Dimension Set ID";
-        CashFlowWorksheetLine."Cash Flow Account No." := CashFlowSetup."P. Adv. Letter CF Acc. No. CZZ";
+        CashFlowWorksheetLine."Cash Flow Account No." := CFSetup."P. Adv. Letter CF Acc. No. CZZ";
         CashFlowWorksheetLine.Description := CopyStr(
             StrSubstNo(
                 ThreePlaceholdersTxt,

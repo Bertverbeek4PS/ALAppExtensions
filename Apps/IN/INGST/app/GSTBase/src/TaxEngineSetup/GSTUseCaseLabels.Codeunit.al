@@ -202,6 +202,11 @@ codeunit 18019 "GST Use Case Labels"
         CaseList.Add('{ce65aeff-0248-437e-b8a6-87c60e49efd4}');
         CaseList.Add('{0ebd8b25-3c27-46ae-8cd7-4e870db1315b}');
         CaseList.Add('{97437c0c-3e99-4d15-9378-34ac4b8fd002}');
+        CaseList.Add('{9CF523A9-24DB-4928-A3CB-8DC5FCA4AF69}');
+        CaseList.Add('{e8b90257-9f0d-42f4-a340-13a648d11829}');
+        CaseList.Add('{874048a6-575b-456f-a2e7-26532da3f1ca}');
+        CaseList.Add('{9304251b-68e9-41d1-a6fd-00424ab38ee6}');
+        CaseList.Add('{7d71fa6f-572e-4c61-b3cb-297e4521e1a9}');
     end;
 
     procedure GetConfig(CaseID: Guid; var Handled: Boolean): Text
@@ -347,6 +352,11 @@ codeunit 18019 "GST Use Case Labels"
         "{ce65aeff-0248-437e-b8a6-87c60e49efd4}Lbl": Label 'GST Use Cases';
         "{0ebd8b25-3c27-46ae-8cd7-4e870db1315b}Lbl": Label 'GST Use Cases';
         "{97437c0c-3e99-4d15-9378-34ac4b8fd002}Lbl": Label 'GST Use Cases';
+        "{9CF523A9-24DB-4928-A3CB-8DC5FCA4AF69}Lbl": Label 'GST Use Cases';
+        "{e8b90257-9f0d-42f4-a340-13a648d11829}Lbl": Label 'GST Use Cases';
+        "{874048a6-575b-456f-a2e7-26532da3f1ca}Lbl": Label 'GST Use Cases';
+        "{9304251b-68e9-41d1-a6fd-00424ab38ee6}Lbl": Label 'GST Use Cases';
+        "{7d71fa6f-572e-4c61-b3cb-297e4521e1a9}Lbl": Label 'GST Use Cases';
     begin
         Handled := true;
 
@@ -663,6 +673,16 @@ codeunit 18019 "GST Use Case Labels"
                 exit("{0ebd8b25-3c27-46ae-8cd7-4e870db1315b}Lbl");
             '{97437c0c-3e99-4d15-9378-34ac4b8fd002}':
                 exit("{97437c0c-3e99-4d15-9378-34ac4b8fd002}Lbl");
+            '{9CF523A9-24DB-4928-A3CB-8DC5FCA4AF69}':
+                exit("{9CF523A9-24DB-4928-A3CB-8DC5FCA4AF69}Lbl");
+            '{e8b90257-9f0d-42f4-a340-13a648d11829}':
+                exit("{e8b90257-9f0d-42f4-a340-13a648d11829}Lbl");
+            '{874048a6-575b-456f-a2e7-26532da3f1ca}':
+                exit("{874048a6-575b-456f-a2e7-26532da3f1ca}Lbl");
+            '{9304251b-68e9-41d1-a6fd-00424ab38ee6}':
+                exit("{9304251b-68e9-41d1-a6fd-00424ab38ee6}Lbl");
+            '{7d71fa6f-572e-4c61-b3cb-297e4521e1a9}':
+                exit("{7d71fa6f-572e-4c61-b3cb-297e4521e1a9}Lbl");
         end;
 
         Handled := false;

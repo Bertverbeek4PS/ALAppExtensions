@@ -17,6 +17,7 @@ using Microsoft.Sales.Receivables;
 using System.Reflection;
 using System.Telemetry;
 using System.Utilities;
+using Microsoft.Finance.Currency;
 
 codeunit 10826 "Generate File FEC"
 {
@@ -161,19 +162,11 @@ codeunit 10826 "Generate File FEC"
                 UpdateProgressDialog(1, Format(Round(Counter / CounterTotal * 100, 1)));
 
                 if GLEntry."Posting Date" <> ClosingDate(GLEntry."Posting Date") then
-#if not CLEAN23
-                    ProcessGLEntry(GLEntry, AuditFileExportHeader);
-#else
                     ProcessGLEntry(GLEntry);
-#endif
             until GLEntry.Next() = 0;
     end;
 
-#if not CLEAN23
-    local procedure ProcessGLEntry(var GLEntry: Record "G/L Entry"; AuditFileExportHeader: Record "Audit File Export Header")
-#else
     local procedure ProcessGLEntry(var GLEntry: Record "G/L Entry")
-#endif
     var
         BankAccountLedgerEntry: Record "Bank Account Ledger Entry";
         GLRegister: Record "G/L Register";
@@ -185,6 +178,7 @@ codeunit 10826 "Generate File FEC"
         CurrencyCode: Code[10];
         DocNoApplied: Text;
         DateApplied: Date;
+        DateCreated: Date;
     begin
         PartyNo := '';
         PartyName := '';
@@ -241,15 +235,15 @@ codeunit 10826 "Generate File FEC"
             end;
 
         FindGLRegister(GLRegister, GLEntry."Entry No.");
+        if GLRegister.SystemCreatedAt <> 0DT then
+            DateCreated := DT2Date(GLRegister.SystemCreatedAt)
+        else
+            DateCreated := GLRegister."Creation Date";
 
         WriteGLEntryToFile(
             GLEntry,
-#if CLEAN23
             GLEntry."Transaction No.",
-#else
-            GetProgressiveNo(GLRegister, GLEntry, AuditFileExportHeader),
-#endif
-            GLRegister."Creation Date", PartyNo, PartyName, FCYAmount, CurrencyCode, DocNoApplied, DateApplied);
+            DateCreated, PartyNo, PartyName, FCYAmount, CurrencyCode, DocNoApplied, DateApplied);
     end;
 
     local procedure CalcDetailedBalanceBySource(GLAccountNo: Code[20]; SourceType: Enum "Gen. Journal Source Type"; SourceNo: Code[20]) TotalAmt: Decimal
@@ -304,6 +298,7 @@ codeunit 10826 "Generate File FEC"
         GLRegisterGlobal."From Entry No." := GLRegister."From Entry No.";
         GLRegisterGlobal."To Entry No." := GLRegister."To Entry No.";
         GLRegisterGlobal."Creation Date" := GLRegister."Creation Date";
+        GLRegisterGlobal.SystemCreatedAt := GLRegister.SystemCreatedAt;
     end;
 
     local procedure GetOpeningBalance(var GLAccount: Record "G/L Account"; PeriodStartDate: Date): Decimal
@@ -484,15 +479,6 @@ codeunit 10826 "Generate File FEC"
             DescriptionValue := SourceCode.Description;
         end;
     end;
-
-#if not CLEAN23
-    local procedure GetProgressiveNo(var GLRegister: Record "G/L Register"; var GLEntry: Record "G/L Entry"; AuditFileExportHeader: Record "Audit File Export Header"): Integer
-    begin
-        if AuditFileExportHeader."Use Transaction No." then
-            exit(GLEntry."Transaction No.");
-        exit(GLRegister."No.");
-    end;
-#endif
 
     local procedure GetTransPayRecEntriesCount(TransactionNo: Integer; PayRecAcc: Code[20]): Integer
     var
@@ -843,5 +829,38 @@ codeunit 10826 "Generate File FEC"
         TempBlob.CreateOutStream(BlobOutStream);
         foreach TextLine in LinesList do
             BlobOutStream.WriteText(TextLine);
+    end;
+
+    local procedure GetCustomerReceivablesAccount(CustomerNo: Code[20]): Code[20]
+    var
+        DetailedCustLedgEntry: Record "Detailed Cust. Ledg. Entry";
+        CustomerPostingGroup: Record "Customer Posting Group";
+    begin
+        DetailedCustLedgEntry.SetRange("Customer No.", CustomerNo);
+        DetailedCustLedgEntry.FindFirst();
+        CustomerPostingGroup.Get(DetailedCustLedgEntry."Posting Group");
+        exit(CustomerPostingGroup."Receivables Account");
+    end;
+
+    local procedure GetVendorPayablesAccount(VendorNo: Code[20]): Code[20]
+    var
+        Vendor: Record Vendor;
+        VendorPostingGroup: Record "Vendor Posting Group";
+    begin
+        Vendor.Get(VendorNo);
+        VendorPostingGroup.Get(Vendor."Vendor Posting Group");
+        exit(VendorPostingGroup."Payables Account");
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Exch. Rate Adjmt. Process", 'OnAfterInitDtldCustLedgerEntry', '', false, false)]
+    local procedure UpdateDtldCustLedgerEntryCurrAdjmtAccNo(var DetailedCustLedgEntry: Record "Detailed Cust. Ledg. Entry")
+    begin
+        DetailedCustLedgEntry."Curr. Adjmt. G/L Account No." := GetCustomerReceivablesAccount(DetailedCustLedgEntry."Customer No.");
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Exch. Rate Adjmt. Process", 'OnAfterInitDtldVendLedgerEntry', '', false, false)]
+    local procedure UpdateDtldVendLedgerEntryCurrAdjmtAccNo(var DetailedVendorLedgEntry: Record "Detailed Vendor Ledg. Entry")
+    begin
+        DetailedVendorLedgEntry."Curr. Adjmt. G/L Account No." := GetVendorPayablesAccount(DetailedVendorLedgEntry."Vendor No.");
     end;
 }

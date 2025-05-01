@@ -151,7 +151,7 @@ report 31195 "Service Contract Quote CZL"
             column(StartingDate_ServiceContractHeaderCaption; FieldCaption("Starting Date"))
             {
             }
-            column(StartingDate_ServiceContractHeader; "Starting Date")
+            column(StartingDate_ServiceContractHeader; Format("Starting Date"))
             {
             }
             column(InvoicePeriod_ServiceContractHeaderCaption; FieldCaption("Invoice Period"))
@@ -163,7 +163,7 @@ report 31195 "Service Contract Quote CZL"
             column(NextInvoiceDate_ServiceContractHeaderCaption; FieldCaption("Next Invoice Date"))
             {
             }
-            column(NextInvoiceDate_ServiceContractHeader; "Next Invoice Date")
+            column(NextInvoiceDate_ServiceContractHeader; Format("Next Invoice Date"))
             {
             }
             column(AnnualAmount_ServiceContractHeaderCaption; FieldCaption("Annual Amount"))
@@ -340,8 +340,8 @@ report 31195 "Service Contract Quote CZL"
                 CurrReport.Language := LanguageMgt.GetLanguageIdOrDefault("Language Code");
                 CurrReport.FormatRegion := LanguageMgt.GetFormatRegionOrDefault("Format Region");
 
-                FormatAddress.ServContractSellto(CustAddr, "Service Contract Header");
-                FormatAddress.ServContractShipto(ShipToAddr, "Service Contract Header");
+                ServiceFormatAddress.ServContractSellto(CustAddr, "Service Contract Header");
+                ServiceFormatAddress.ServContractShipto(ShipToAddr, "Service Contract Header");
                 DocFooterText := FormatDocumentMgtCZL.GetDocumentFooterText("Language Code");
                 if not Customer.Get("Customer No.") then
                     Customer.Init();
@@ -406,13 +406,7 @@ report 31195 "Service Contract Quote CZL"
         FormatAddress: Codeunit "Format Address";
         FormatDocumentMgtCZL: Codeunit "Format Document Mgt. CZL";
         SegManagement: Codeunit SegManagement;
-        CompanyAddr: array[8] of Text[100];
-        CustAddr: array[8] of Text[100];
-        ShipToAddr: array[8] of Text[100];
-        DocFooterText: Text[1000];
-        NoOfCopies: Integer;
-        NoOfLoops: Integer;
-        LogInteraction: Boolean;
+        ServiceFormatAddress: Codeunit "Service Format Address";
         LogInteractionEnable: Boolean;
         DocumentLbl: Label 'Service Contract Quote';
         PageLbl: Label 'Page';
@@ -424,6 +418,15 @@ report 31195 "Service Contract Quote CZL"
         PrintedByLbl: Label 'Printed by';
         VATRegistrationNoLbl: Label 'VAT Registration No.';
         RegistrationNoLbl: Label 'Registration No.';
+
+    protected var
+        CompanyAddr: array[8] of Text[100];
+        CustAddr: array[8] of Text[100];
+        ShipToAddr: array[8] of Text[100];
+        DocFooterText: Text[1000];
+        NoOfCopies: Integer;
+        NoOfLoops: Integer;
+        LogInteraction: Boolean;
 
     procedure InitializeRequest(NoOfCopiesFrom: Integer; LogInteractionFrom: Boolean)
     begin

@@ -5,27 +5,33 @@ using System.Security.AccessControl;
 
 codeunit 1267 "Password Helper"
 {
-    procedure GeneratePassword(Length: Integer): Text;
+
+    [NonDebuggable]
+    procedure GenerateSecretPassword(Length: Integer): SecretText;
     var
         Regex: Codeunit "Regex";
         PasswordHandler: Codeunit "Password Handler";
         Result: Text;
     begin
         Regex.Regex('[\[\]\{\}\(\)\+\-&%\.\^;,:\|=\\\/\?''"`\~><_]');
-        Result := Regex.Replace(PasswordHandler.GeneratePassword(Length), '');
+        Result := Regex.Replace(PasswordHandler.GenerateSecretPassword(Length).Unwrap(), '');
         while WeakYodleePassword(Result) do
-            Result := Regex.Replace(PasswordHandler.GeneratePassword(Length), '');
+            Result := Regex.Replace(PasswordHandler.GenerateSecretPassword(Length).Unwrap(), '');
         exit(Result);
     end;
 
-    procedure WeakYodleePassword(Password: Text): Boolean
+
+    [NonDebuggable]
+    procedure WeakYodleePassword(Pass: SecretText): Boolean
     var
         CurrentChar: Char;
         ReferenceChar: Char;
         i: Integer;
         CurrentSequenceLength: Integer;
         Length: Integer;
+        Password: Text;
     begin
+        Password := Pass.Unwrap();
         if Password = DelChr(Password, '=', '!@#$*') then
             exit(true);
 
@@ -81,4 +87,3 @@ codeunit 1267 "Password Helper"
         exit(false);
     end;
 }
-

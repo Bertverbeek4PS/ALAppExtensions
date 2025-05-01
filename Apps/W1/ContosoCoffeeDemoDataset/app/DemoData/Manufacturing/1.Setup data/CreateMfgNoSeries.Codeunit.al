@@ -1,3 +1,13 @@
+// ------------------------------------------------------------------------------------------------
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License. See License.txt in the project root for license information.
+// ------------------------------------------------------------------------------------------------
+
+namespace Microsoft.DemoData.Manufacturing;
+
+using Microsoft.DemoTool.Helpers;
+using Microsoft.Foundation.NoSeries;
+
 codeunit 4784 "Create Mfg No Series"
 {
     InherentEntitlements = X;
@@ -7,16 +17,16 @@ codeunit 4784 "Create Mfg No Series"
     var
         ContosoNoSeries: Codeunit "Contoso No Series";
     begin
-        ContosoNoSeries.InsertNoSeries(WorkCenter(), WorkCentersLbl, 'W10', 'W99990', '', '', 10, true, true);
-        ContosoNoSeries.InsertNoSeries(ProductionBOM(), ProductionBOMsLbl, 'P10', 'P99990', '', '', 10, true, true);
-        ContosoNoSeries.InsertNoSeries(MachineCenter(), MachineCentersLbl, 'M10', 'M99990', '', '', 10, true, true);
-        ContosoNoSeries.InsertNoSeries(Routing(), RoutingLbl, 'R10', 'R99990', '', '', 10, true, true);
+        ContosoNoSeries.InsertNoSeries(WorkCenter(), WorkCentersLbl, 'W10', 'W99990', '', '', 10, Enum::"No. Series Implementation"::Sequence, true);
+        ContosoNoSeries.InsertNoSeries(ProductionBOM(), ProductionBOMsLbl, 'P10', 'P99990', '', '', 10, Enum::"No. Series Implementation"::Sequence, true);
+        ContosoNoSeries.InsertNoSeries(MachineCenter(), MachineCentersLbl, 'M10', 'M99990', '', '', 10, Enum::"No. Series Implementation"::Sequence, true);
+        ContosoNoSeries.InsertNoSeries(Routing(), RoutingLbl, 'R10', 'R99990', '', '', 10, Enum::"No. Series Implementation"::Sequence, true);
 
-        ContosoNoSeries.InsertNoSeries(SimulatedOrder(), SimulatedOrdersLbl, '1001', '2999', '2995', '', 1, false, false);
+        ContosoNoSeries.InsertNoSeries(SimulatedOrder(), SimulatedOrdersLbl, '1001', '2999', '2995', '', 1, Enum::"No. Series Implementation"::Normal, false);
 
-        ContosoNoSeries.InsertNoSeries(PlannedOrder(), PlannedOrdersLbl, '101001', '102999', '102995', '', 1, false, false);
-        ContosoNoSeries.InsertNoSeries(FirmPlannedOrder(), FirmPlannedOrdersLbl, '101001', '102999', '102995', '', 1, false, false);
-        ContosoNoSeries.InsertNoSeries(ReleasedOrderCode(), ReleasedOrdersLbl, '101001', '102999', '102995', '', 1, false, false);
+        ContosoNoSeries.InsertNoSeries(PlannedOrder(), PlannedOrdersLbl, '101001', '102999', '102995', '', 1, Enum::"No. Series Implementation"::Normal, false);
+        ContosoNoSeries.InsertNoSeries(FirmPlannedOrder(), FirmPlannedOrdersLbl, '101001', '102999', '102995', '', 1, Enum::"No. Series Implementation"::Normal, false);
+        ContosoNoSeries.InsertNoSeries(ReleasedOrderCode(), ReleasedOrdersLbl, '101001', '102999', '102995', '', 1, Enum::"No. Series Implementation"::Normal, false);
     end;
 
     var

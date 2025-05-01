@@ -41,25 +41,25 @@ codeunit 4001 "Hybrid Cloud Management"
         CannotStartUpgradeFailedErr: Label 'You cannot start the upgrade again because there are companies in which data upgrade has failed. After investigating the failure you must delete these companies and start the migration again, revert to backup or point in time restore to the point before running upgrade.';
         CannotStartUpgradeFailedTablesErr: Label 'The upgrade can''t start due to %1 failed tables.\\Investigate and mitigate the failure, and then use the Replicate Data action again to migrate the missing data from the on-premises database.', Comment = '%1 the number of failed tables.';
         CannotTriggerUpgradeErr: Label 'Upgrade cannot be started until all companies are successfully replicated.';
-        CannotStartUpgradeNotAllComapniesAreMigratedErr: Label 'Cannot start upgrade because following companies are not ready to be migrated:%1', Comment = '%1 - Comma separated list of companies pending cloud migration';
+        CannotStartUpgradeNotAllCompaniesAreMigratedErr: Label 'Cannot start upgrade because following companies are not ready to be migrated:%1', Comment = '%1 - Comma separated list of companies pending cloud migration';
         ScheduledFixingDataTelemetryMsg: Label 'Companion table repair scheduled.', Locked = true;
-        MarkedCompanyAsUpgradePendingTelemetryMsg: Label 'Marked Company as Upgrade Pending. Comany name: %1', Locked = true;
+        MarkedCompanyAsUpgradePendingTelemetryMsg: Label 'Marked Company as Upgrade Pending. Company name: %1', Locked = true;
         DelegatedAdminCannotRunCloudMigrationErr: Label 'A delegated admin cannot run the cloud migration until a licensed user has approved access to the migration tool.';
         DisableReplicationRevokedConsentTxt: Label 'Cloud migration has been disabled because a user has revoked consent.';
         NoConsentToRevokeErr: Label 'There are no consent records to revoke.';
         StatusIsAlreadyGrantedErr: Label 'The access was already granted';
-        GrantApprovalPermissionErr: Label 'You do not have permission to grant approval to run the cloud migration setup. You must be a licensed user, and your user account must have the SUPER permission set.';
+        GrantApprovalPermissionErr: Label 'You do not have permission to grant approval to run the cloud migration setup. You must be a licensed user, and your user account must have the SUPER permission set. Check the documentation for more information.';
         DoYouWantToDisableQst: Label 'If you revoke consent, the cloud migration stops.\\Are you sure that you want to continue?';
         RemovingTheTablesWillRemoveHistoryQst: Label 'If you exclude tables in this way, already migrated data may be deleted. This way, if the same tables are included in the cloud migration later, data from the on-premises database will replace the existing data in the target environment. If you do not want this to happen, do not include the table to the cloud migration again.\\Are you sure that you want to continue?';
         CompanyWasNotCreatedErr: Label 'Company creation failed. Errors could be found on the assisted setup page. Company name is: %1.', Comment = '%1 - Company name';
-        CompanySetupIsNotcompleteErr: Label 'The company %1 was not setup correctly. Current setup status: %2', Comment = '%1 - Company name, %2 - Company Status';
-        MigraitonAlreadyInProgressErr: Label 'A migration is already in progress.';
+        CompanySetupIsNotCompleteErr: Label 'The company %1 was not setup correctly. Current setup status: %2', Comment = '%1 - Company name, %2 - Company Status';
+        MigrationAlreadyInProgressErr: Label 'A migration is already in progress.';
         CompanyCreationFailedErr: Label 'Company creation failed with error %1. Please fix this and re-run the Cloud Migration Setup wizard.', Comment = '%1 - the error message';
         CompanyInProgressErr: Label 'Cannot run data replication since the background task has not finished creating companies yet.';
         UpgradeNotExecutedErr: Label 'Upgrade was not run, because there were no extensions capable of handling the upgrade.';
-        CannotStartUpgradeFromOldRunErr: Label 'The selected summary is not from the latest replication run. To start the upgrade, select the summary from the lastest run.';
+        CannotStartUpgradeFromOldRunErr: Label 'The selected summary is not from the latest replication run. To start the upgrade, select the summary from the latest run.';
         ResetCloudFailedErr: Label 'Failed to reset cloud data';
-        DisablereplicationTxt: Label 'Cloud migration has been disabled.';
+        DisableReplicationTxt: Label 'Cloud migration has been disabled.';
         DisabledCloudMigrationFromCompanyTxt: Label 'Cloud migration has been disabled.', Locked = true;
         UnfavorableStyleLbl: Label 'Unfavorable', Locked = true;
         CloudMigrationStatusNotSetupLbl: Label 'Cloud migration is disabled';
@@ -99,6 +99,15 @@ codeunit 4001 "Hybrid Cloud Management"
         CompanyManagementDocumentationHyperlinkTxt: Label 'https://go.microsoft.com/fwlink/?linkid=2248704', Locked = true;
         WarnManageCompaniesNotificationsTxt: Label 'Cloud Migration - Manage Companies Warning';
         WarnManageCompaniesDescriptionTxt: Label 'Warning to the users to read the documentation before managing the companies during cloud migration.';
+        GrantedConsentToDelegatedAdminLbl: Label 'The delegated admin has been granted consent to setup and run the cloud migration.', Locked = true;
+        RevokedConsentToDelegatedAdminLbl: Label 'The consent granted to delegated admin for cloud migration has been revoked.', Locked = true;
+        CloudMigrationSetupLbl: Label 'Cloud migration setup completed by UserSecurityId %1.', Comment = '%1 - User Security ID', Locked = true;
+        ReplicationRunStartedLbl: Label 'Replication run started by UserSecurityId %1.', Comment = '%1 - User Security ID', Locked = true;
+        CloudMigrationDisabledLbl: Label 'Cloud migration setup disabled by UserSecurityId %1.', Comment = '%1 - User Security ID', Locked = true;
+        CloudMigrationCompletedLbl: Label 'Cloud migration is completed.', Locked = true;
+        DataUpgradeStartedLbl: Label 'Data upgrade started by UserSecurityId %1.', Comment = '%1 - User Security ID', Locked = true;
+        ConsentGrantedLbl: Label 'The delegated admin has been granted consent to run the cloud migration by UserSecurityId %1.', Comment = '%1 - User Security ID', Locked = true;
+        ConsentRevokedLbl: Label 'The consent granted to delegated admin to run the cloud migration has been revoked by UserSecurityId %1.', Comment = '%1 - User Security ID', Locked = true;
 
     procedure CanHandleNotification(SubscriptionId: Text; ProductId: Text): Boolean
     var
@@ -129,12 +138,27 @@ codeunit 4001 "Hybrid Cloud Management"
 
     procedure CanGrantPermission(): Boolean
     var
+        AzureADPlan: Codeunit "Azure AD Plan";
+        PlanIds: Codeunit "Plan Ids";
         UserPermissions: Codeunit "User Permissions";
         IdentityManagement: Codeunit "Identity Management";
-        CanSetup: Boolean;
     begin
-        CanSetup := UserPermissions.IsSuper(UserSecurityId()) and TaskScheduler.CanCreateTask() and (not IdentityManagement.IsUserDelegatedAdmin());
-        exit(CanSetup);
+        if (not TaskScheduler.CanCreateTask()) then
+            exit(false);
+
+        // Internal Admins cannot run Cloud Migration nor give consent
+        if AzureADPlan.IsPlanAssignedToUser(PlanIds.GetBCAdminPlanId()) then
+            exit(false);
+
+        // Delegated admins cannot grant permissions, it must be an user that is employee of the company
+        if IdentityManagement.IsUserDelegatedAdmin() then
+            exit(false);
+
+        // User must have SUPER permissions
+        if (not UserPermissions.IsSuper(UserSecurityId())) then
+            exit(false);
+
+        exit(true);
     end;
 
     procedure CreateCompanies()
@@ -288,9 +312,8 @@ codeunit 4001 "Hybrid Cloud Management"
         IntelligentCloudSetup: Record "Intelligent Cloud Setup";
     begin
         IntelligentCloudSetup.Get();
-        DisableMigration(IntelligentCloudSetup."Product ID", DisablereplicationTxt, false)
+        DisableMigration(IntelligentCloudSetup."Product ID", DisableReplicationTxt, false)
     end;
-
 
     [Scope('OnPrem')]
     procedure DisableMigration()
@@ -298,7 +321,7 @@ codeunit 4001 "Hybrid Cloud Management"
         IntelligentCloudSetup: Record "Intelligent Cloud Setup";
     begin
         IntelligentCloudSetup.Get();
-        DisableMigration(IntelligentCloudSetup."Product ID", DisablereplicationTxt, true)
+        DisableMigration(IntelligentCloudSetup."Product ID", DisableReplicationTxt, true)
     end;
 
     [Scope('OnPrem')]
@@ -309,6 +332,7 @@ codeunit 4001 "Hybrid Cloud Management"
         HybridDeployment: Codeunit "Hybrid Deployment";
         FeatureTelemetry: Codeunit "Feature Telemetry";
         HybridCloudManagement: Codeunit "Hybrid Cloud Management";
+        CompletedCloudMigration: Boolean;
     begin
         RestoreDataPerDatabaseTables(HybridReplicationSummary."Run ID", SourceProduct);
 
@@ -316,6 +340,13 @@ codeunit 4001 "Hybrid Cloud Management"
             HybridDeployment.Initialize(SourceProduct);
             HybridDeployment.DisableReplication();
         end;
+
+        OnIsCloudMigrationCompleted(SourceProduct, CompletedCloudMigration);
+        if not CompletedCloudMigration then
+            CompletedCloudMigration := Reason = CloudMigrationCompletedTxt;
+
+        if CompletedCloudMigration then
+            SendCompletedCloudMigrationTelemetry();
 
         IntelligentCloud.Get();
         IntelligentCloud.Enabled := false;
@@ -373,7 +404,9 @@ codeunit 4001 "Hybrid Cloud Management"
         Commit();
         ReplicationRunCompletedArg.DeleteAll();
 
-        GetLastReplicationSummary(LastHybridReplicationSummary);
+        if not GetLastReplicationSummary(LastHybridReplicationSummary) then
+            exit;
+
         LastHybridReplicationSummary."Data Repair Status" := LastHybridReplicationSummary."Data Repair Status"::Completed;
         LastHybridReplicationSummary.Modify();
     end;
@@ -407,7 +440,7 @@ codeunit 4001 "Hybrid Cloud Management"
     [Scope('OnPrem')]
     procedure FinishDataLakeMigration(HybridReplicationSummary: Record "Hybrid Replication Summary")
     var
-        SesssionID: Integer;
+        SessionID: Integer;
         Handled: Boolean;
     begin
         OnAfterDataLakeMigration(HybridReplicationSummary, Handled);
@@ -421,7 +454,7 @@ codeunit 4001 "Hybrid Cloud Management"
             TaskScheduler.CreateTask(Codeunit::"Data Lake Migration Cleanup", 0, true, CompanyName(), CurrentDateTime() + 60000);
             Session.LogMessage('SmbMig-002', 'Scheduled task to clean up Azure Data Lake migration.', Verbosity::Normal, DataClassification::SystemMetadata, TelemetryScope::ExtensionPublisher, 'Category', GetTelemetryCategory());
         end else
-            if not Session.StartSession(SesssionID, Codeunit::"Data Lake Migration Cleanup", CompanyName()) then
+            if not Session.StartSession(SessionID, Codeunit::"Data Lake Migration Cleanup", CompanyName()) then
                 Session.LogMessage('SmbMig-003', 'Scheduled task to clean up Azure Data Lake migration.', Verbosity::Normal, DataClassification::SystemMetadata, TelemetryScope::ExtensionPublisher, 'Category', GetTelemetryCategory());
     end;
 
@@ -614,6 +647,7 @@ codeunit 4001 "Hybrid Cloud Management"
         TelemetryDimensions.Add('TotalOnPremSize', Format(HybridCompany.GetTotalOnPremSize(), 0, 9));
         TelemetryDimensions.Add('Product', IntelligentCloudSetup."Product ID");
         FeatureTelemetry.LogUsage('0000EUR', GetFeatureTelemetryName(), 'Completed Cloud Migration Setup.', TelemetryDimensions);
+        Session.LogAuditMessage(StrSubstNo(CloudMigrationSetupLbl, UserSecurityId()), SecurityOperationResult::Success, AuditCategory::ApplicationManagement, 6, 0, TelemetryDimensions);
     end;
 
     local procedure SendTelemetryDisableCloudMigration(Reason: Text)
@@ -627,7 +661,8 @@ codeunit 4001 "Hybrid Cloud Management"
         if IntelligentCloudSetup.Get() then
             TelemetryDimensions.Add('SourceProduct', IntelligentCloudSetup."Product ID");
 
-        Session.LogMessage('0000IGC', DisabledCloudMigrationFromCompanyTxt, Verbosity::Normal, DataClassification::SystemMetadata, TelemetryScope::All, 'Category', CloudMigrationTok);
+        Session.LogMessage('0000IGC', DisabledCloudMigrationFromCompanyTxt, Verbosity::Normal, DataClassification::SystemMetadata, TelemetryScope::All, TelemetryDimensions);
+        Session.LogAuditMessage(StrSubstNo(CloudMigrationDisabledLbl, UserSecurityId()), SecurityOperationResult::Success, AuditCategory::ApplicationManagement, 6, 0, TelemetryDimensions);
     end;
 
     local procedure GetDisabledReasonTelemetryText(): Text
@@ -798,6 +833,7 @@ codeunit 4001 "Hybrid Cloud Management"
 
         FeatureTelemetry.LogUptake('0000JMV', GetFeatureTelemetryName(), Enum::"Feature Uptake Status"::Used);
         FeatureTelemetry.LogUsage('0000JMY', GetFeatureTelemetryName(), 'Running data replication');
+        Session.LogAuditMessage(StrSubstNo(ReplicationRunStartedLbl, UserSecurityId()), SecurityOperationResult::Success, AuditCategory::ApplicationManagement, 6, 0, TelemetryDictionary);
     end;
 
     internal procedure GetReplicationTypeTelemetryText(var HybridReplicationSummary: Record "Hybrid Replication Summary"): Text
@@ -851,7 +887,7 @@ codeunit 4001 "Hybrid Cloud Management"
         exit(ReplicationCompletedServiceTypeTxt = ServiceType);
     end;
 
-    internal procedure SendCloudMigrationTelemetry()
+    internal procedure SendCompletedCloudMigrationTelemetry()
     var
         IntelligentCloud: Record "Intelligent Cloud";
         HybridCompany: Record "Hybrid Company";
@@ -870,11 +906,14 @@ codeunit 4001 "Hybrid Cloud Management"
         TelemetryDimensions.Add('NumberOfCompanies', Format(HybridCompany.Count(), 0, 9));
         TelemetryDimensions.Add('TotalMigrationSize', Format(HybridCompany.GetTotalMigrationSize(), 0, 9));
         TelemetryDimensions.Add('TotalOnPremSize', Format(HybridCompany.GetTotalOnPremSize(), 0, 9));
-        IntelligentCloudSetup."Product ID" := 'Unknown';
-        if IntelligentCloudSetup.Get() then;
-        TelemetryDimensions.Add('Product', IntelligentCloudSetup."Product ID");
+        if IntelligentCloudSetup.Get() then
+            TelemetryDimensions.Add('Product', IntelligentCloudSetup."Product ID")
+        else
+            IntelligentCloudSetup."Product ID" := 'Unknown';
+
         TelemetryDimensions.Add('MigrationDateTime', Format(IntelligentCloud.SystemModifiedAt, 0, 9));
         FeatureTelemetry.LogUsage('0000JMR', HybridCloudManagement.GetFeatureTelemetryName(), 'Tenant was cloud migrated', TelemetryDimensions);
+        Session.LogAuditMessage(CloudMigrationCompletedLbl, SecurityOperationResult::Success, AuditCategory::ApplicationManagement, 6, 0, TelemetryDimensions);
     end;
 
     procedure RestoreDefaultMigrationTableMappings(DeleteExisting: Boolean)
@@ -904,7 +943,6 @@ codeunit 4001 "Hybrid Cloud Management"
 
         FeatureTelemetry.LogUptake('0000JV4', HybridCloudManagement.GetFeatureTelemetryName(), Enum::"Feature Uptake Status"::Used);
         FeatureTelemetry.LogUsage('0000JV5', HybridCloudManagement.GetFeatureTelemetryName(), 'Completed the cloud migration succesfully');
-        SendCloudMigrationTelemetry();
 
         if GuiAllowed then
             Message(CloudMigrationCompletedTxt);
@@ -1026,6 +1064,7 @@ codeunit 4001 "Hybrid Cloud Management"
     var
         ExistingHybridDAApproval: Record "Hybrid DA Approval";
         NewHybridDAApproval: Record "Hybrid DA Approval";
+        TelemetryDictionary: Dictionary of [Text, Text];
     begin
         if not CanGrantPermission() then
             Error(GrantApprovalPermissionErr);
@@ -1041,6 +1080,9 @@ codeunit 4001 "Hybrid Cloud Management"
             NewHybridDAApproval.Insert();
             NewHybridDAApproval.Get(NewHybridDAApproval.PrimaryKey);
             HybridDAApproval := NewHybridDAApproval;
+            TelemetryDictionary.Add('Category', GetTelemetryCategory());
+            Session.LogMessage('0000MRL', GrantedConsentToDelegatedAdminLbl, Verbosity::Normal, DataClassification::OrganizationIdentifiableInformation, TelemetryScope::ExtensionPublisher, TelemetryDictionary);
+            Session.LogAuditMessage(StrSubstNo(ConsentGrantedLbl, UserSecurityId()), SecurityOperationResult::Success, AuditCategory::ApplicationManagement, 6, 0);
             exit;
         end;
 
@@ -1048,6 +1090,9 @@ codeunit 4001 "Hybrid Cloud Management"
             HybridDAApproval."Granted By User Security ID" := UserSecurityId();
             HybridDAApproval."Granted Date" := CurrentDateTime();
             HybridDAApproval.Status := NewHybridDAApproval.Status::Granted;
+            TelemetryDictionary.Add('Category', GetTelemetryCategory());
+            Session.LogMessage('0000MRM', GrantedConsentToDelegatedAdminLbl, Verbosity::Normal, DataClassification::OrganizationIdentifiableInformation, TelemetryScope::ExtensionPublisher, TelemetryDictionary);
+            Session.LogAuditMessage(StrSubstNo(ConsentGrantedLbl, UserSecurityId()), SecurityOperationResult::Success, AuditCategory::ApplicationManagement, 6, 0);
             HybridDAApproval.Modify();
             exit;
         end;
@@ -1119,7 +1164,7 @@ codeunit 4001 "Hybrid Cloud Management"
         HybridReplicationSummary.SetRange(Status, HybridReplicationSummary.Status::InProgress);
         HybridReplicationSummary.SetFilter("Start Time", '>%1', (CurrentDateTime() - 86400000));
         if not HybridReplicationSummary.IsEmpty() then begin
-            Reason := MigraitonAlreadyInProgressErr;
+            Reason := MigrationAlreadyInProgressErr;
             exit(true);
         end;
 
@@ -1180,7 +1225,7 @@ codeunit 4001 "Hybrid Cloud Management"
         if not Confirm(DoYouWantToDisableQst) then
             exit;
 
-        SetRevokedToHybridDAAproval();
+        SetRevokedToHybridDAApproval();
 
         if IntelligentCloudSetup.Get() then
             DisableMigration(IntelligentCloudSetup."Product ID", DisableReplicationRevokedConsentTxt, true);
@@ -1188,7 +1233,7 @@ codeunit 4001 "Hybrid Cloud Management"
 
     internal procedure CheckNeedsApprovalToRunCloudMigration(): Boolean
     var
-        HybridDAAPproval: Record "Hybrid DA Approval";
+        HybridDAApproval: Record "Hybrid DA Approval";
         AzureADGraphUser: Codeunit "Azure AD Graph User";
         IsUserDelegated: Boolean;
     begin
@@ -1198,8 +1243,8 @@ codeunit 4001 "Hybrid Cloud Management"
             exit(false);
         end;
 
-        HybridDAAPproval.SetRange(Status, HybridDAAPproval.Status::Granted);
-        exit(HybridDAAPproval.IsEmpty());
+        HybridDAApproval.SetRange(Status, HybridDAApproval.Status::Granted);
+        exit(HybridDAApproval.IsEmpty());
     end;
 
     internal procedure VerifyCompaniesCreatedSuccessfully(var ErrorMessage: Text): Boolean
@@ -1221,7 +1266,7 @@ codeunit 4001 "Hybrid Cloud Management"
 
             CompanySetupStatus := AssistedCompanySetupStatus.GetCompanySetupStatusValue(Company.Name);
             if not (CompanySetupStatus = CompanySetupStatus::Completed) then begin
-                ErrorMessage := StrSubstNo(CompanySetupIsNotcompleteErr, Company.Name, CompanySetupStatus);
+                ErrorMessage := StrSubstNo(CompanySetupIsNotCompleteErr, Company.Name, CompanySetupStatus);
                 exit(false);
             end;
         until HybridCompany.Next() = 0;
@@ -1230,10 +1275,11 @@ codeunit 4001 "Hybrid Cloud Management"
     end;
 
     [Scope('OnPrem')]
-    local procedure SetRevokedToHybridDAAproval()
+    local procedure SetRevokedToHybridDAApproval()
     var
         GrantedHybridDAApproval: Record "Hybrid DA Approval";
         CopyGrantedHybridDAApproval: Record "Hybrid DA Approval";
+        TelemetryDictionary: Dictionary of [Text, Text];
     begin
         GrantedHybridDAApproval.SetRange(Status, GrantedHybridDAApproval.Status::Granted);
         if not GrantedHybridDAApproval.FindSet() then
@@ -1246,6 +1292,10 @@ codeunit 4001 "Hybrid Cloud Management"
             CopyGrantedHybridDAApproval.Status := CopyGrantedHybridDAApproval.Status::Revoked;
             CopyGrantedHybridDAApproval.Modify();
         until GrantedHybridDAApproval.Next() = 0;
+
+        TelemetryDictionary.Add('Category', GetTelemetryCategory());
+        Session.LogMessage('0000MRN', RevokedConsentToDelegatedAdminLbl, Verbosity::Normal, DataClassification::SystemMetadata, TelemetryScope::ExtensionPublisher, TelemetryDictionary);
+        Session.LogAuditMessage(StrSubstNo(ConsentRevokedLbl, UserSecurityId()), SecurityOperationResult::Success, AuditCategory::ApplicationManagement, 6, 0);
     end;
 
     internal procedure CanSkipIRSetup(SqlServerType: Option; RuntimeNameTxt: Text): Boolean
@@ -1503,6 +1553,16 @@ codeunit 4001 "Hybrid Cloud Management"
         IntelligentCloudStatus.Delete();
     end;
 
+    procedure RunDataUpgradeAPI(var HybridReplicationSummary: Record "Hybrid Replication Summary")
+    var
+        IntelligentCloudSetup: Record "Intelligent Cloud Setup";
+        HybridDeployment: Codeunit "Hybrid Deployment";
+    begin
+        IntelligentCloudSetup.Get();
+        HybridDeployment.Initialize(IntelligentCloudSetup."Product ID");
+        RunDataUpgrade(HybridReplicationSummary);
+    end;
+
     procedure RunDataUpgrade(var HybridReplicationSummary: Record "Hybrid Replication Summary")
     var
         ExistingHybridReplicationSummary: Record "Hybrid Replication Summary";
@@ -1527,6 +1587,7 @@ codeunit 4001 "Hybrid Cloud Management"
             TelemetryDictionary.Add('SourceProduct', IntelligentCloudSetup."Product ID");
 
         Session.LogMessage('0000K0K', DataUpgradeScheduledLbl, Verbosity::Normal, DataClassification::SystemMetadata, TelemetryScope::All, TelemetryDictionary);
+        Session.LogAuditMessage(StrSubstNo(DataUpgradeStartedLbl, UserSecurityId()), SecurityOperationResult::Success, AuditCategory::ApplicationManagement, 6, 0);
     end;
 
     [EventSubscriber(ObjectType::Codeunit, Codeunit::"Guided Experience", 'OnRegisterAssistedSetup', '', false, false)]
@@ -1658,7 +1719,7 @@ codeunit 4001 "Hybrid Cloud Management"
             until HybridCompany.Next() = 0;
 
             if CompaniesNotReadyForUpgrade <> '' then begin
-                ErrorMessage := StrSubstNo(CannotStartUpgradeNotAllComapniesAreMigratedErr, CompaniesNotReadyForUpgrade.TrimStart(','));
+                ErrorMessage := StrSubstNo(CannotStartUpgradeNotAllCompaniesAreMigratedErr, CompaniesNotReadyForUpgrade.TrimStart(','));
                 exit(false);
             end;
         end;
@@ -1989,6 +2050,11 @@ codeunit 4001 "Hybrid Cloud Management"
 
     [InternalEvent(false, false)]
     local procedure OnBeforeCanScheduleTask(var Handled: Boolean)
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnIsCloudMigrationCompleted(SourceProduct: Text; var CloudMigrationCompleted: Boolean)
     begin
     end;
 }

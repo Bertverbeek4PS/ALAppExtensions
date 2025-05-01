@@ -1,3 +1,11 @@
+// ------------------------------------------------------------------------------------------------
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License. See License.txt in the project root for license information.
+// ------------------------------------------------------------------------------------------------
+namespace Microsoft.DemoTool.Helpers;
+
+using Microsoft.Foundation.NoSeries;
+
 codeunit 5127 "Contoso No Series"
 {
     InherentEntitlements = X;
@@ -14,7 +22,8 @@ codeunit 5127 "Contoso No Series"
         OverwriteData := Overwrite;
     end;
 
-    procedure InsertNoSeries(NoSeriesCode: Code[20]; Description: Text[100]; StartingNo: Code[20]; EndingNo: Code[20]; WarningNo: Code[20]; LastNoUsed: Code[20]; IncrementBy: Integer; AllowGaps: Boolean; AllowManualNo: Boolean)
+
+    procedure InsertNoSeries(NoSeriesCode: Code[20]; Description: Text[100]; StartingNo: Code[20]; EndingNo: Code[20]; WarningNo: Code[20]; LastNoUsed: Code[20]; IncrementBy: Integer; Implementation: Enum "No. Series Implementation"; AllowManualNo: Boolean)
     var
         NoSeries: Record "No. Series";
         NoSeriesLine: Record "No. Series Line";
@@ -52,7 +61,7 @@ codeunit 5127 "Contoso No Series"
         NoSeriesLine.Validate("Warning No.", WarningNo);
         NoSeriesLine.Validate("Last No. Used", LastNoUsed);
         NoSeriesLine.Validate("Increment-by No.", IncrementBy);
-        NoSeriesLine.Validate("Allow Gaps in Nos.", AllowGaps);
+        NoSeriesLine.Validate(Implementation, Implementation);
         NoSeriesLine.Validate("Line No.", GetDefaultLineNo());
 
         if NoSeriesLineExists then

@@ -3,18 +3,22 @@
 // Licensed under the MIT License. See License.txt in the project root for license information.
 // ------------------------------------------------------------------------------------------------
 
-codeunit 139753 "OAuth Client Mock" implements "Email - OAuth Client"
+codeunit 139753 "OAuth Client Mock" implements "Email - OAuth Client v2"
 {
     SingleInstance = true;
 
-    internal procedure GetAccessToken(var AccessToken: Text)
+
+    internal procedure GetAccessToken(var AccessToken: SecretText)
     begin
         TryGetAccessToken(AccessToken);
     end;
 
-    internal procedure TryGetAccessToken(var AccessToken: Text): Boolean
+    internal procedure TryGetAccessToken(var AccessToken: SecretText): Boolean
+    var
+        Token: Text;
     begin
-        AccessToken := 'test token';
+        Token := 'test token';
+        AccessToken := Token;
         exit(true);
     end;
 }

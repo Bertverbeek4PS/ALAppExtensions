@@ -10,6 +10,7 @@ using Microsoft.Finance.GeneralLedger.Posting;
 using Microsoft.Finance.GeneralLedger.Preview;
 using Microsoft.Finance.GeneralLedger.Setup;
 using Microsoft.Foundation.AuditCodes;
+using System.Utilities;
 
 codeunit 31269 "Compensation - Post CZC"
 {
@@ -77,6 +78,7 @@ codeunit 31269 "Compensation - Post CZC"
 
                 GenJournalLine."Source Code" := SourceCodeSetup."Compensation CZC";
                 GenJournalLine."System-Created Entry" := true;
+                OnRunOnBeforeRunGenJnlPostLine(GenJournalLine, CompensationLineCZC, TempAmount);
                 GenJnlPostLine.RunWithCheck(GenJournalLine);
                 CompensationLineCZC."Amount (LCY)" := TempAmount;
                 CompensationLineCZC.Modify();
@@ -106,6 +108,7 @@ codeunit 31269 "Compensation - Post CZC"
                 GenJournalLine."Shortcut Dimension 2 Code" := CompensationLineCZC."Shortcut Dimension 2 Code";
                 GenJournalLine."Source Code" := SourceCodeSetup."Compensation CZC";
                 GenJournalLine."System-Created Entry" := true;
+                OnRunOnBeforeRunBalanceGenJnlPostLine(GenJournalLine, CompensationLineCZC);
                 GenJnlPostLine.RunWithCheck(GenJournalLine);
             end;
 
@@ -116,6 +119,7 @@ codeunit 31269 "Compensation - Post CZC"
             PostedCompensationHeaderCZC.TransferFields(Rec);
             PostedCompensationHeaderCZC.Insert();
             OnAfterPostedCompensationHeaderInsertCZC(Rec, PostedCompensationHeaderCZC);
+            RecordLinkManagement.CopyLinks(Rec, PostedCompensationHeaderCZC);
 
             Clear(CompensationLineCZC);
             CompensationLineCZC.SetRange("Compensation No.", Rec."No.");
@@ -130,7 +134,10 @@ codeunit 31269 "Compensation - Post CZC"
 
             UpdateIncomingDocument(Rec."Incoming Document Entry No.", Rec."Posting Date", PostedCompensationHeaderCZC."No.");
 
+            RecordLinkManagement.RemoveLinks(CompensationLineCZC);
             CompensationLineCZC.DeleteAll();
+            if Rec.HasLinks() then
+                Rec.DeleteLinks();
             Rec.Delete();
             WindowDialog.Close();
         end else
@@ -150,6 +157,7 @@ codeunit 31269 "Compensation - Post CZC"
         GenJnlPostLine: Codeunit "Gen. Jnl.-Post Line";
         CompensationManagementCZC: Codeunit "Compensation Management CZC";
         GenJnlPostPreview: Codeunit "Gen. Jnl.-Post Preview";
+        RecordLinkManagement: Codeunit "Record Link Management";
         WindowDialog: Dialog;
         Text002Err: Label 'There is nothing to post.';
         Text008Msg: Label 'Posting lines              #2######.', Comment = '%2 = progress bar';
@@ -196,6 +204,16 @@ codeunit 31269 "Compensation - Post CZC"
 
     [IntegrationEvent(false, false)]
     local procedure OnAfterPostCompensationCZC(var CompensationHeaderCZC: Record "Compensation Header CZC"; var GenJnlPostLine: Codeunit "Gen. Jnl.-Post Line"; PostedCompensationHeaderNo: Code[20])
+    begin
+    end;
+
+    [IntegrationEvent(true, false)]
+    local procedure OnRunOnBeforeRunGenJnlPostLine(var GenJournalLine: Record "Gen. Journal Line"; var CompensationLineCZC: Record "Compensation Line CZC"; var TempAmount: Decimal)
+    begin
+    end;
+
+    [IntegrationEvent(true, false)]
+    local procedure OnRunOnBeforeRunBalanceGenJnlPostLine(var GenJournalLine: Record "Gen. Journal Line"; var CompensationLineCZC: Record "Compensation Line CZC")
     begin
     end;
 }

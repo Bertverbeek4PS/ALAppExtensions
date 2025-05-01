@@ -1,4 +1,4 @@
-﻿// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License. See License.txt in the project root for license information.
 // ------------------------------------------------------------------------------------------------
@@ -109,7 +109,7 @@ table 18552 "Posting No. Series"
             Database::"Service Header":
                 GetServicePostingNoSeries(Record);
             Database::"Gen. Journal Line":
-                GetGenJournalpostingSeries(Record);
+                GetGenJournalPostingSeries(Record);
             else begin
                 OnGetPostingNoSeries(Record, Handled);
                 if not Handled then
@@ -122,7 +122,7 @@ table 18552 "Posting No. Series"
     var
         PostingNoSeries: Record "Posting No. Series";
         SalesSetup: Record "Sales & Receivables Setup";
-        NoSeriesMgt: Codeunit NoSeriesManagement;
+        NoSeries: Codeunit "No. Series";
         NoSeriesCode: Code[20];
         TableID: Integer;
     begin
@@ -138,36 +138,39 @@ table 18552 "Posting No. Series"
                     if NoSeriesCode <> '' then
                         SalesHeader."Shipping No. Series" := NoSeriesCode
                     else
-                        NoSeriesMgt.SetDefaultSeries(SalesHeader."Shipping No. Series", SalesSetup."Posted Shipment Nos.");
+                        if NoSeries.IsAutomatic(SalesSetup."Posted Shipment Nos.") then
+                            SalesHeader."Shipping No. Series" := SalesSetup."Posted Shipment Nos.";
 
                     NoSeriesCode := LoopPostingNoSeries(TableID, PostingNoSeries, SalesHeader, PostingNoSeries."Document Type"::"Sales Invoice Header");
                     if NoSeriesCode <> '' then
                         SalesHeader."Posting No. Series" := NoSeriesCode
                     else
-                        NoSeriesMgt.SetDefaultSeries(SalesHeader."Posting No. Series", SalesSetup."Posted Invoice Nos.");
+                        if NoSeries.IsAutomatic(SalesSetup."Posted Invoice Nos.") then
+                            SalesHeader."Posting No. Series" := SalesSetup."Posted Invoice Nos.";
                 end;
 
             SalesHeader."Document Type"::"Return Order",
-            SalesHeader."Document Type"::"Credit Memo":
+    SalesHeader."Document Type"::"Credit Memo":
                 begin
                     NoSeriesCode := LoopPostingNoSeries(TableID, PostingNoSeries, SalesHeader, PostingNoSeries."Document Type"::"Sales Cr.Memo Header");
                     if NoSeriesCode <> '' then
                         SalesHeader."Posting No. Series" := NoSeriesCode
                     else
-                        NoSeriesMgt.SetDefaultSeries(SalesHeader."Posting No. Series", SalesSetup."Posted Credit Memo Nos.");
+                        if NoSeries.IsAutomatic(SalesSetup."Posted Credit Memo Nos.") then
+                            SalesHeader."Posting No. Series" := SalesSetup."Posted Credit Memo Nos.";
 
                     NoSeriesCode := LoopPostingNoSeries(TableID, PostingNoSeries, SalesHeader, PostingNoSeries."Document Type"::"Sales Return Receipt No.");
                     if NoSeriesCode <> '' then
                         SalesHeader."Return Receipt No. Series" := NoSeriesCode
                     else
                         if SalesSetup."Return Receipt on Credit Memo" then
-                            NoSeriesMgt.SetDefaultSeries(SalesHeader."Return Receipt No. Series", SalesSetup."Posted Return Receipt Nos.");
-
+                                if NoSeries.IsAutomatic(SalesSetup."Posted Return Receipt Nos.") then
+                                SalesHeader."Return Receipt No. Series" := SalesSetup."Posted Return Receipt Nos.";
                 end;
         end;
     end;
 
-    local procedure GetGenJournalpostingSeries(var GenJournalLine: Record "Gen. Journal Line")
+    local procedure GetGenJournalPostingSeries(var GenJournalLine: Record "Gen. Journal Line")
     var
         PostingNoSeries: Record "Posting No. Series";
         NoSeriesCode: Code[20];
@@ -178,14 +181,13 @@ table 18552 "Posting No. Series"
 
         if NoSeriesCode <> '' then
             GenJournalLine."Posting No. Series" := NoSeriesCode;
-
     end;
 
     local procedure GetPurchasePostingNoSeries(var PurchaseHeader: Record "Purchase Header")
     var
         PostingNoSeries: Record "Posting No. Series";
         PurchSetup: Record "Purchases & Payables Setup";
-        NoSeriesMgt: Codeunit NoSeriesManagement;
+        NoSeries: Codeunit "No. Series";
         NoSeriesCode: Code[20];
         TableID: Integer;
     begin
@@ -201,13 +203,14 @@ table 18552 "Posting No. Series"
                     if NoSeriesCode <> '' then
                         PurchaseHeader."Receiving No. Series" := NoSeriesCode
                     else
-                        NoSeriesMgt.SetDefaultSeries(PurchaseHeader."Receiving No. Series", PurchSetup."Posted Receipt Nos.");
-
+                        if NoSeries.IsAutomatic(PurchSetup."Posted Receipt Nos.") then
+                            PurchaseHeader."Receiving No. Series" := PurchSetup."Posted Receipt Nos.";
                     NoSeriesCode := LoopPostingNoSeries(TableID, PostingNoSeries, PurchaseHeader, PostingNoSeries."Document Type"::"Purch. Inv. Header");
                     if NoSeriesCode <> '' then
                         PurchaseHeader."Posting No. Series" := NoSeriesCode
                     else
-                        NoSeriesMgt.SetDefaultSeries(PurchaseHeader."Posting No. Series", PurchSetup."Posted Invoice Nos.");
+                        if NoSeries.IsAutomatic(PurchSetup."Posted Invoice Nos.") then
+                            PurchaseHeader."Posting No. Series" := PurchSetup."Posted Invoice Nos.";
                 end;
 
             PurchaseHeader."Document Type"::"Return Order",
@@ -217,14 +220,16 @@ table 18552 "Posting No. Series"
                     if NoSeriesCode <> '' then
                         PurchaseHeader."Posting No. Series" := NoSeriesCode
                     else
-                        NoSeriesMgt.SetDefaultSeries(PurchaseHeader."Posting No. Series", PurchSetup."Posted Credit Memo Nos.");
+                        if NoSeries.IsAutomatic(PurchSetup."Posted Credit Memo Nos.") then
+                            PurchaseHeader."Posting No. Series" := PurchSetup."Posted Credit Memo Nos.";
 
                     NoSeriesCode := LoopPostingNoSeries(TableID, PostingNoSeries, PurchaseHeader, PostingNoSeries."Document Type"::"Purchase Return Shipment No.");
                     if NoSeriesCode <> '' then
                         PurchaseHeader."Return Shipment No. Series" := NoSeriesCode
                     else
                         if PurchSetup."Return Shipment on Credit Memo" then
-                            NoSeriesMgt.SetDefaultSeries(PurchaseHeader."Return Shipment No. Series", PurchSetup."Posted Return Shpt. Nos.");
+                            if NoSeries.IsAutomatic(PurchSetup."Posted Return Shpt. Nos.") then
+                                PurchaseHeader."Return Shipment No. Series" := PurchSetup."Posted Return Shpt. Nos.";
                 end;
         end;
     end;
@@ -233,7 +238,7 @@ table 18552 "Posting No. Series"
     var
         PostingNoSeries: Record "Posting No. Series";
         ServiceSetup: Record "Service Mgt. Setup";
-        NoSeriesMgt: Codeunit NoSeriesManagement;
+        NoSeries: Codeunit "No. Series";
         NoSeriesCode: Code[20];
         TableID: Integer;
     begin
@@ -248,13 +253,15 @@ table 18552 "Posting No. Series"
                     if NoSeriesCode <> '' then
                         ServiceHeader."Shipping No. Series" := NoSeriesCode
                     else
-                        NoSeriesMgt.SetDefaultSeries(ServiceHeader."Shipping No. Series", ServiceSetup."Posted Service Shipment Nos.");
+                        if NoSeries.IsAutomatic(ServiceSetup."Posted Service Shipment Nos.") then
+                            ServiceHeader."Shipping No. Series" := ServiceSetup."Posted Service Shipment Nos.";
 
                     NoSeriesCode := LoopPostingNoSeries(TableID, PostingNoSeries, ServiceHeader, PostingNoSeries."Document Type"::"Service Invoice Header");
                     if NoSeriesCode <> '' then
                         ServiceHeader."Posting No. Series" := NoSeriesCode
                     else
-                        NoSeriesMgt.SetDefaultSeries(ServiceHeader."Posting No. Series", ServiceSetup."Posted Service Invoice Nos.");
+                        if NoSeries.IsAutomatic(ServiceSetup."Posted Service Invoice Nos.") then
+                            ServiceHeader."Posting No. Series" := ServiceSetup."Posted Service Invoice Nos.";
                 end;
             ServiceHeader."Document Type"::"Credit Memo":
                 begin
@@ -262,7 +269,8 @@ table 18552 "Posting No. Series"
                     if NoSeriesCode <> '' then
                         ServiceHeader."Posting No. Series" := NoSeriesCode
                     else
-                        NoSeriesMgt.SetDefaultSeries(ServiceHeader."Posting No. Series", ServiceSetup."Posted Serv. Credit Memo Nos.");
+                        if NoSeries.IsAutomatic(ServiceSetup."Posted Serv. Credit Memo Nos.") then
+                            ServiceHeader."Posting No. Series" := ServiceSetup."Posted Serv. Credit Memo Nos.";
                 end;
         end;
     end;

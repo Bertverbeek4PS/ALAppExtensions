@@ -7,6 +7,7 @@ namespace Microsoft.eServices.EDocument;
 table 6127 "E-Document Integration Log"
 {
     DataClassification = CustomerContent;
+    ReplicateData = false;
 
     fields
     {
@@ -38,13 +39,27 @@ table 6127 "E-Document Integration Log"
         {
             Caption = 'Response Status';
         }
+#if not CLEANSCHEMA28
         field(7; URL; Text[250])
         {
             Caption = 'URL';
+            ObsoleteReason = 'Replaced with Request URL field';
+#if not CLEAN25
+            ObsoleteState = Pending;
+            ObsoleteTag = '25.0';
+#else
+            ObsoleteState = Removed;
+            ObsoleteTag = '28.0';
+#endif
         }
+#endif
         field(8; Method; Text[10])
         {
             Caption = 'Method';
+        }
+        field(9; "Request URL"; Text[2048])
+        {
+            Caption = 'URL';
         }
     }
 

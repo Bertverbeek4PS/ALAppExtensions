@@ -87,6 +87,13 @@ table 11756 "Registration Log CZL"
             Caption = 'Verified VAT Registration No.';
             DataClassification = CustomerContent;
         }
+        field(16; "Verified Country/Region Code"; Code[10])
+        {
+            Caption = 'Verified Country/Region Code';
+            TableRelation = "Country/Region";
+            ValidateTableRelation = false;
+            DataClassification = CustomerContent;
+        }
         field(20; "Verified Date"; DateTime)
         {
             Caption = 'Verified Date';
@@ -131,30 +138,29 @@ table 11756 "Registration Log CZL"
         Contact: Record Contact;
         CustContUpdate: Codeunit "CustCont-Update";
         VendContUpdate: Codeunit "VendCont-Update";
-        CustVendBankUpdate: Codeunit "CustVendBank-Update";
         RecordRef: RecordRef;
     begin
         GetAccountRecordRef(RecordRef);
-        if OpenDetailForRecRef(RecordRef) then begin
-            RecordRef.Modify();
+        if OpenDetailForRecRef(RecordRef) then
             case RecordRef.Number of
                 Database::Customer:
                     begin
+                        RecordRef.Modify();
                         RecordRef.SetTable(Customer);
                         CustContUpdate.OnModify(Customer);
                     end;
                 Database::Vendor:
                     begin
+                        RecordRef.Modify();
                         RecordRef.SetTable(Vendor);
                         VendContUpdate.OnModify(Vendor);
                     end;
                 Database::Contact:
                     begin
                         RecordRef.SetTable(Contact);
-                        CustVendBankUpdate.Run(Contact);
+                        Contact.Modify(true);
                     end;
             end;
-        end;
     end;
 
     procedure OpenDetailForRecRef(var RecordRef: RecordRef): Boolean
@@ -170,8 +176,8 @@ table 11756 "Registration Log CZL"
 
     local procedure ApplyDetailChanges(var RecordRef: RecordRef) Result: Boolean
     var
-        RegistrationLogDetail: Record "Registration Log Detail CZL";
         DummyCustomer: Record Customer;
+        RegistrationLogDetail: Record "Registration Log Detail CZL";
         VATRegLogSuppression: Codeunit "VAT Reg. Log Suppression CZL";
         IsHandled: Boolean;
     begin
@@ -192,6 +198,8 @@ table 11756 "Registration Log CZL"
                         ValidateField(RecordRef, DummyCustomer.FieldName(City), RegistrationLogDetail.Response, false);
                     RegistrationLogDetail."Field Name"::"Post Code":
                         ValidateField(RecordRef, DummyCustomer.FieldName("Post Code"), RegistrationLogDetail.Response, false);
+                    RegistrationLogDetail."Field Name"::"Country/Region Code":
+                        ValidateField(RecordRef, DummyCustomer.FieldName("Country/Region Code"), RegistrationLogDetail.Response, false);
                     RegistrationLogDetail."Field Name"::"VAT Registration No.":
                         begin
                             BindSubscription(VATRegLogSuppression);
@@ -283,6 +291,8 @@ table 11756 "Registration Log CZL"
         LogDetail(
           TotalCount, ValidCount, Enum::"Reg. Log Detail Field CZL"::"Post Code", GetFieldValue(RecordRef, DummyCustomer.FieldName("Post Code")), "Verified Post Code");
         LogDetail(
+          TotalCount, ValidCount, Enum::"Reg. Log Detail Field CZL"::"Country/Region Code", GetFieldValue(RecordRef, DummyCustomer.FieldName("Country/Region Code")), "Verified Country/Region Code");
+        LogDetail(
           TotalCount, ValidCount, Enum::"Reg. Log Detail Field CZL"::"VAT Registration No.", GetFieldValue(RecordRef, DummyCustomer.FieldName("VAT Registration No.")), "Verified VAT Registration No.");
 
         if TotalCount > 0 then
@@ -301,15 +311,10 @@ table 11756 "Registration Log CZL"
     var
         RegistrationLogDetail: Record "Registration Log Detail CZL";
     begin
-        if ResponseValue = '' then
-            exit;
-
         InitRegistrationLogDetailFromRec(RegistrationLogDetail, FieldName, CurrentValue);
         RegistrationLogDetail.Response := CopyStr(ResponseValue, 1, MaxStrLen(RegistrationLogDetail.Response));
 
-        if (RegistrationLogDetail."Current Value" = RegistrationLogDetail.Response) and
-           (RegistrationLogDetail.Response <> '')
-        then
+        if RegistrationLogDetail."Current Value" = RegistrationLogDetail.Response then
             RegistrationLogDetail.Status := RegistrationLogDetail.Status::Valid;
         RegistrationLogDetail.Insert();
 

@@ -28,13 +28,13 @@ using System.Email;
 using System.Globalization;
 using System.Security.User;
 using System.Utilities;
+using System.Text;
 
 report 31189 "Sales Invoice CZL"
 {
-    DefaultLayout = RDLC;
-    RDLCLayout = './Src/Reports/SalesInvoice.rdl';
     Caption = 'Sales Invoice';
     PreviewMode = PrintLayout;
+    DefaultRenderingLayout = "SalesInvoice.rdl";
     WordMergeDataItem = "Sales Invoice Header";
 
     dataset
@@ -153,26 +153,6 @@ report 31189 "Sales Invoice CZL"
             column(VATLbl; VATLbl)
             {
             }
-#if not CLEAN22
-            column(PrepayedLbl; PrepayedLbl)
-            {
-                ObsoleteState = Pending;
-                ObsoleteReason = 'The advance letters are not supported in this report any more. For invoice with advance letter use report 31018 from "Advance Payments Localization for Czech" app.';
-                ObsoleteTag = '22.0';
-            }
-            column(TotalAfterPrepayedLbl; TotalAfterPrepayedLbl)
-            {
-                ObsoleteState = Pending;
-                ObsoleteReason = 'The advance letters are not supported in this report any more. For invoice with advance letter use report 31018 from "Advance Payments Localization for Czech" app.';
-                ObsoleteTag = '22.0';
-            }
-            column(PaymentsLbl; PaymentsLbl)
-            {
-                ObsoleteState = Pending;
-                ObsoleteReason = 'The advance letters are not supported in this report any more. For invoice with advance letter use report 31018 from "Advance Payments Localization for Czech" app.';
-                ObsoleteTag = '22.0';
-            }
-#endif
             column(DisplayAdditionalFeeNote; DisplayAdditionalFeeNote)
             {
             }
@@ -186,6 +166,9 @@ report 31189 "Sales Invoice CZL"
             {
             }
             column(DocumentNoLbl; DocumentNoLbl)
+            {
+            }
+            column(QRPaymentLbl; QRPaymentLbl)
             {
             }
             column(No_SalesInvoiceHeader; "No.")
@@ -224,25 +207,25 @@ report 31189 "Sales Invoice CZL"
             column(PostingDate_SalesInvoiceHeaderCaption; FieldCaption("Posting Date"))
             {
             }
-            column(PostingDate_SalesInvoiceHeader; "Posting Date")
+            column(PostingDate_SalesInvoiceHeader; Format("Posting Date"))
             {
             }
             column(VATDate_SalesInvoiceHeaderCaption; FieldCaption("VAT Reporting Date"))
             {
             }
-            column(VATDate_SalesInvoiceHeader; "VAT Reporting Date")
+            column(VATDate_SalesInvoiceHeader; Format("VAT Reporting Date"))
             {
             }
             column(DueDate_SalesInvoiceHeaderCaption; FieldCaption("Due Date"))
             {
             }
-            column(DueDate_SalesInvoiceHeader; FormatDate("Due Date"))
+            column(DueDate_SalesInvoiceHeader; Format("Due Date"))
             {
             }
             column(DocumentDate_SalesInvoiceHeaderCaption; FieldCaption("Document Date"))
             {
             }
-            column(DocumentDate_SalesInvoiceHeader; "Document Date")
+            column(DocumentDate_SalesInvoiceHeader; Format("Document Date"))
             {
             }
             column(PmntSymbol1; PaymentSymbolLabel[1])
@@ -290,10 +273,16 @@ report 31189 "Sales Invoice CZL"
             column(Amount_SalesInvoiceHeader; Amount)
             {
             }
+            column(Formatted_Amount_SalesInvoiceHeader; format(Amount, 0, AutoFormat.ResolveAutoFormat(Enum::"Auto Format"::AmountFormat, "Sales Invoice Header"."Currency Code")))
+            {
+            }
             column(AmountIncludingVAT_SalesInvoiceHeaderCaption; FieldCaption("Amount Including VAT"))
             {
             }
             column(AmountIncludingVAT_SalesInvoiceHeader; "Amount Including VAT")
+            {
+            }
+            column(Formatted_AmountIncludingVAT_SalesInvoiceHeader; format("Amount Including VAT", 0, AutoFormat.ResolveAutoFormat(Enum::"Auto Format"::AmountFormat, "Sales Invoice Header"."Currency Code")))
             {
             }
             column(CalculatedExchRate; CalculatedExchRate)
@@ -339,6 +328,9 @@ report 31189 "Sales Invoice CZL"
             {
             }
             column(ShipToAddr6; ShipToAddr[6])
+            {
+            }
+            column(QRPaymentCode; QRPaymentCode)
             {
             }
             dataitem(CopyLoop; "Integer")
@@ -400,6 +392,9 @@ report 31189 "Sales Invoice CZL"
                     column(UnitPrice_SalesInvoiceLine; UnitPriceExclVAT)
                     {
                     }
+                    column(Formatted_UnitPrice_SalesInvoiceLine; format(UnitPriceExclVAT, 0, AutoFormat.ResolveAutoFormat(Enum::"Auto Format"::AmountFormat, "Sales Invoice Header"."Currency Code")))
+                    {
+                    }
                     column(LineDiscount_SalesInvoiceLineCaption; FieldCaption("Line Discount %"))
                     {
                     }
@@ -418,10 +413,16 @@ report 31189 "Sales Invoice CZL"
                     column(LineAmount_SalesInvoiceLine; "Line Amount")
                     {
                     }
+                    column(Formatted_LineAmount_SalesInvoiceLine; format("Line Amount", 0, AutoFormat.ResolveAutoFormat(Enum::"Auto Format"::AmountFormat, "Sales Invoice Header"."Currency Code")))
+                    {
+                    }
                     column(InvDiscountAmount_SalesInvoiceLineCaption; FieldCaption("Inv. Discount Amount"))
                     {
                     }
                     column(InvDiscountAmount_SalesInvoiceLine; "Inv. Discount Amount")
+                    {
+                    }
+                    column(Formatted_InvDiscountAmount_SalesInvoiceLine; format("Inv. Discount Amount", 0, AutoFormat.ResolveAutoFormat(Enum::"Auto Format"::AmountFormat, "Sales Invoice Header"."Currency Code")))
                     {
                     }
 
@@ -430,6 +431,9 @@ report 31189 "Sales Invoice CZL"
                         UnitPriceExclVAT := "Unit Price";
                         if "Sales Invoice Header"."Prices Including VAT" then
                             UnitPriceExclVAT := Round("Unit Price" / (1 + "VAT %" / 100), Currency."Amount Rounding Precision");
+
+                        if FormatDocument.HideDocumentLine(HideLinesWithZeroQuantity, "Sales Invoice Line", FieldNo(Quantity)) then
+                            CurrReport.Skip();
                     end;
                 }
                 dataitem(SalesInvoiceAdvance; "Integer")
@@ -473,10 +477,16 @@ report 31189 "Sales Invoice CZL"
                         AutoFormatExpression = "Sales Invoice Line".GetCurrencyCode();
                         AutoFormatType = 1;
                     }
+                    column(Formatted_VATAmtLineVATBase; format(TempVATAmountLine."VAT Base", 0, AutoFormat.ResolveAutoFormat(Enum::"Auto Format"::AmountFormat, "Sales Invoice Header"."Currency Code")))
+                    {
+                    }
                     column(VATAmtLineVATAmt; TempVATAmountLine."VAT Amount")
                     {
                         AutoFormatExpression = "Sales Invoice Header"."Currency Code";
                         AutoFormatType = 1;
+                    }
+                    column(Formatted_VATAmtLineVATAmt; format(TempVATAmountLine."VAT Amount", 0, AutoFormat.ResolveAutoFormat(Enum::"Auto Format"::AmountFormat, "Sales Invoice Header"."Currency Code")))
+                    {
                     }
                     column(VATAmtLineVATBaseLCY; TempVATAmountLine."VAT Base (LCY) CZL")
                     {
@@ -572,7 +582,11 @@ report 31189 "Sales Invoice CZL"
 
                 trigger OnPreDataItem()
                 begin
+#if not CLEAN27
                     NoOfLoops := Abs(NoOfCopies) + Customer."Invoice Copies" + 1;
+#else
+                    NoOfLoops := Abs(NoOfCopies) + 1;
+#endif
                     if NoOfLoops <= 0 then
                         NoOfLoops := 1;
 
@@ -626,12 +640,12 @@ report 31189 "Sales Invoice CZL"
 
                 if "Currency Code" = '' then
                     "Currency Code" := "General Ledger Setup"."LCY Code";
-#if not CLEAN22
-#pragma warning disable AL0432
-                if not ReplaceVATDateMgtCZL.IsEnabled() then
-                    "VAT Reporting Date" := "VAT Date CZL";
-#pragma warning restore AL0432
-#endif
+                Clear(QRPaymentCode);
+                if "Sales & Receivables Setup"."Print QR Payment CZL" and PaymentMethod."Print QR Payment CZL" then begin
+                    CalcFields("Remaining Amount");
+                    if "Remaining Amount" <> 0 then
+                        GenerateQRPaymentCode();
+                end;
             end;
         }
     }
@@ -665,6 +679,12 @@ report 31189 "Sales Invoice CZL"
                         Caption = 'Show Additional Fee Note';
                         ToolTip = 'Specifies when the additional fee note is to be show';
                     }
+                    field(HideLinesWithZeroQuantityControl; HideLinesWithZeroQuantity)
+                    {
+                        ApplicationArea = Basic, Suite;
+                        ToolTip = 'Specifies if the lines with zero quantity are printed.';
+                        Caption = 'Hide lines with zero quantity';
+                    }
                 }
             }
         }
@@ -679,6 +699,25 @@ report 31189 "Sales Invoice CZL"
             LogInteractionEnable := LogInteraction;
         end;
     }
+
+    rendering
+    {
+        layout("SalesInvoice.rdl")
+        {
+            Type = RDLC;
+            LayoutFile = './Src/Reports/SalesInvoice.rdl';
+            Caption = 'Sales Invoice (RDL)';
+            Summary = 'The Sales Invoice (RDL) provides a detailed layout.';
+        }
+        layout("SalesInvoiceEmail.docx")
+        {
+            Type = Word;
+            LayoutFile = './Src/Reports/SalesInvoiceEmail.docx';
+            Caption = 'Sales Invoice Email (Word)';
+            Summary = 'The Sales Invoice Email (Word) provides an email body layout.';
+        }
+    }
+
     trigger OnPreReport()
     begin
         if not CurrReport.UseRequestPage then
@@ -686,13 +725,8 @@ report 31189 "Sales Invoice CZL"
     end;
 
     var
-        TempVATAmountLine: Record "VAT Amount Line" temporary;
         TempLineFeeNoteonReportHist: Record "Line Fee Note on Report Hist." temporary;
         Customer: Record Customer;
-        PaymentTerms: Record "Payment Terms";
-        PaymentMethod: Record "Payment Method";
-        ShipmentMethod: Record "Shipment Method";
-        ReasonCode: Record "Reason Code";
         Currency: Record Currency;
         CurrencyExchangeRate: Record "Currency Exchange Rate";
         VATClause: Record "VAT Clause";
@@ -700,26 +734,10 @@ report 31189 "Sales Invoice CZL"
         FormatAddress: Codeunit "Format Address";
         FormatDocument: Codeunit "Format Document";
         FormatDocumentMgtCZL: Codeunit "Format Document Mgt. CZL";
-#if not CLEAN22
-#pragma warning disable AL0432
-        ReplaceVATDateMgtCZL: Codeunit "Replace VAT Date Mgt. CZL";
-#pragma warning restore AL0432
-#endif
         SegManagement: Codeunit SegManagement;
-        ExchRateText: Text[50];
-        VATClauseText: Text;
-        CompanyAddr: array[8] of Text[100];
-        CustAddr: array[8] of Text[100];
-        ShipToAddr: array[8] of Text[100];
-        DocFooterText: Text[1000];
-        PaymentSymbol: array[2] of Text;
-        PaymentSymbolLabel: array[2] of Text;
+        AutoFormat: Codeunit "Auto Format";
+        LogInteractionEnable: Boolean;
         DocumentLbl: Label 'Invoice';
-        CalculatedExchRate: Decimal;
-        UnitPriceExclVAT: Decimal;
-        NoOfCopies: Integer;
-        NoOfLoops: Integer;
-        LogInteraction: Boolean;
         ExchRateLbl: Label 'Exchange Rate %1 %2 / %3 %4', Comment = '%1 = Calculated Exchange Rate, %2 = LCY Code, %3 = Exchange Rate, %4 = Currency Code';
         PageLbl: Label 'Page';
         CopyLbl: Label 'Copy';
@@ -740,18 +758,35 @@ report 31189 "Sales Invoice CZL"
         VATAmtLbl: Label 'VAT Amount';
         TotalLbl: Label 'total';
         VATLbl: Label 'VAT';
-#if not CLEAN22
-        PrepayedLbl: Label 'Prepayed Advances';
-        TotalAfterPrepayedLbl: Label 'Total after Prepayed Advances';
-        PaymentsLbl: Label 'Payments List';
-#endif
         UnitPriceExclVATLbl: Label 'Unit Price Excl. VAT';
         GreetingLbl: Label 'Hello';
         ClosingLbl: Label 'Sincerely';
         BodyLbl: Label 'Thank you for your business. Your invoice is attached to this message.';
         DocumentNoLbl: Label 'No.';
-        LogInteractionEnable: Boolean;
+        QRPaymentLbl: Label 'QR Payment';
+
+    protected var
+        PaymentTerms: Record "Payment Terms";
+        PaymentMethod: Record "Payment Method";
+        ReasonCode: Record "Reason Code";
+        ShipmentMethod: Record "Shipment Method";
+        TempVATAmountLine: Record "VAT Amount Line" temporary;
+        CompanyAddr: array[8] of Text[100];
+        CustAddr: array[8] of Text[100];
+        ShipToAddr: array[8] of Text[100];
+        PaymentSymbol: array[2] of Text;
+        PaymentSymbolLabel: array[2] of Text;
+        DocFooterText: Text[1000];
+        ExchRateText: Text[50];
+        VATClauseText: Text;
+        QRPaymentCode: Text;
+        CalculatedExchRate: Decimal;
+        UnitPriceExclVAT: Decimal;
+        NoOfCopies: Integer;
+        NoOfLoops: Integer;
         DisplayAdditionalFeeNote: Boolean;
+        LogInteraction: Boolean;
+        HideLinesWithZeroQuantity: Boolean;
 
     procedure InitLogInteraction()
     begin
@@ -814,15 +849,22 @@ report 31189 "Sales Invoice CZL"
         FormatAddress.SalesInvShipTo(ShipToAddr, CustAddr, SalesInvoiceHeader);
     end;
 
-    local procedure FormatDate(DateValue: Date): Text
-    begin
-        exit(Format(DateValue, 0, '<Day>.<Month>.<Year4>'));
-    end;
-
     local procedure IsReportInPreviewMode(): Boolean
     var
         MailManagement: Codeunit "Mail Management";
     begin
         exit(CurrReport.Preview or MailManagement.IsHandlingGetEmailBody());
+    end;
+
+    local procedure GenerateQRPaymentCode()
+    var
+        BarcodeSymbology2D: Enum "Barcode Symbology 2D";
+        BarcodeFontProvider2D: Interface "Barcode Font Provider 2D";
+        BarcodeString: Text;
+    begin
+        BarcodeFontProvider2D := Enum::"Barcode Font Provider 2D"::IDAutomation2D;
+        BarcodeSymbology2D := Enum::"Barcode Symbology 2D"::"QR-Code";
+        BarcodeString := "Sales Invoice Header".CreateSalesInvoicePaymentQRCodeStringCZL();
+        QRPaymentCode := BarcodeFontProvider2D.EncodeFont(BarcodeString, BarcodeSymbology2D);
     end;
 }

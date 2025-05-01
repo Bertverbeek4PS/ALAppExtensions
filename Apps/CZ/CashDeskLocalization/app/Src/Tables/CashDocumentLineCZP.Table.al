@@ -7,12 +7,14 @@ namespace Microsoft.Finance.CashDesk;
 using Microsoft.Bank.BankAccount;
 using Microsoft.CRM.Team;
 using Microsoft.Finance;
+using Microsoft.Finance.AllocationAccount;
 using Microsoft.Finance.Currency;
 using Microsoft.Finance.Dimension;
 using Microsoft.Finance.GeneralLedger.Account;
 using Microsoft.Finance.GeneralLedger.Journal;
 using Microsoft.Finance.GeneralLedger.Setup;
 using Microsoft.Finance.ReceivablesPayables;
+using Microsoft.Finance.VAT.Calculation;
 using Microsoft.Finance.VAT.Setup;
 using Microsoft.FixedAssets.Depreciation;
 using Microsoft.FixedAssets.FixedAsset;
@@ -23,6 +25,8 @@ using Microsoft.Foundation.Enums;
 using Microsoft.HumanResources.Employee;
 using Microsoft.HumanResources.Payables;
 using Microsoft.Inventory.Location;
+using Microsoft.Projects.Project.Job;
+using Microsoft.Projects.Project.Planning;
 using Microsoft.Purchases.Payables;
 using Microsoft.Purchases.Vendor;
 using Microsoft.Sales.Customer;
@@ -93,7 +97,8 @@ table 11733 "Cash Document Line CZP"
             if ("Account Type" = const(Vendor)) Vendor else
             if ("Account Type" = const(Employee)) Employee else
             if ("Account Type" = const("Bank Account")) "Bank Account" where("Account Type CZP" = const("Bank Account")) else
-            if ("Account Type" = const("Fixed Asset")) "Fixed Asset";
+            if ("Account Type" = const("Fixed Asset")) "Fixed Asset" else
+            if ("Account Type" = const("Allocation Account")) "Allocation Account";
             DataClassification = CustomerContent;
 
             trigger OnValidate()
@@ -141,14 +146,15 @@ table 11733 "Cash Document Line CZP"
                 IsHandled := false;
                 BreakValidation := false;
                 OnValidateAccountNoOnAfterInitRec(Rec, xRec, TempCashDocumentLineCZP, IsHandled, BreakValidation);
-                if BreakValidation  then
+                if BreakValidation then
                     exit;
                 if not IsHandled then
                     if "Account No." = '' then
                         exit;
 
                 "Currency Code" := CashDocumentHeaderCZP."Currency Code";
-                "Responsibility Center" := CashDocumentHeaderCZP."Responsibility Center";
+                Validate("Salespers./Purch. Code", CashDocumentHeaderCZP."Salespers./Purch. Code");
+                Validate("Responsibility Center", CashDocumentHeaderCZP."Responsibility Center");
                 if "External Document No." = '' then
                     "External Document No." := CashDocumentHeaderCZP."External Document No.";
                 "Reason Code" := CashDocumentHeaderCZP."Reason Code";
@@ -216,9 +222,12 @@ table 11733 "Cash Document Line CZP"
                             end;
                         "Account Type"::Employee:
                             begin
-                                CashDocumentHeaderCZP.TestField("Currency Code", '');
                                 Employee.Get("Account No.");
                                 Description := CopyStr(Employee.FullName(), 1, MaxStrLen(Description));
+                                "Posting Group" := Employee."Employee Posting Group";
+                                "Gen. Posting Type" := "Gen. Posting Type"::" ";
+                                "VAT Bus. Posting Group" := '';
+                                "VAT Prod. Posting Group" := '';
                             end;
                     end;
 
@@ -244,16 +253,6 @@ table 11733 "Cash Document Line CZP"
             if ("Account Type" = const(Customer)) "Customer Posting Group" else
             if ("Account Type" = const(Vendor)) "Vendor Posting Group";
             DataClassification = CustomerContent;
-#if not CLEAN22
-
-            trigger OnValidate()
-            var
-                PostingGroupManagementCZL: Codeunit "Posting Group Management CZL";
-            begin
-                if CurrFieldNo = FieldNo("Posting Group") then
-                    PostingGroupManagementCZL.CheckPostingGroupChange("Posting Group", xRec."Posting Group", Rec);
-            end;
-#else
 
             trigger OnValidate()
             var
@@ -262,7 +261,6 @@ table 11733 "Cash Document Line CZP"
                 if CurrFieldNo = FieldNo("Posting Group") then
                     PostingGroupChange.ChangePostingGroup("Posting Group", xRec."Posting Group", Rec);
             end;
-#endif
         }
         field(14; "Applies-To Doc. Type"; Enum "Gen. Journal Document Type")
         {
@@ -416,7 +414,6 @@ table 11733 "Cash Document Line CZP"
 
                     case "Account Type" of
                         "Account Type"::Customer:
-                            ///GenJournalLine.Validate(Amount, GetAmtToApplyCust(CustLedgEntry, GenJournalLine));
                             GenJournalLine.Validate(Amount, GetAmtToApplyCust(GenJournalLine));
                         "Account Type"::Vendor:
                             GenJournalLine.Validate(Amount, GetAmtToApplyVend(GenJournalLine));
@@ -456,8 +453,7 @@ table 11733 "Cash Document Line CZP"
 
             trigger OnValidate()
             begin
-                TestField("Account Type");
-                TestField("Account No.");
+                CheckEmptyAccount();
                 UpdateAmounts();
             end;
         }
@@ -482,7 +478,8 @@ table 11733 "Cash Document Line CZP"
         {
             CaptionClass = '1,2,1';
             Caption = 'Shortcut Dimension 1 Code';
-            TableRelation = "Dimension Value".Code where("Global Dimension No." = const(1));
+            TableRelation = "Dimension Value".Code where("Global Dimension No." = const(1),
+                                                          Blocked = const(false));
             DataClassification = CustomerContent;
 
             trigger OnValidate()
@@ -494,7 +491,8 @@ table 11733 "Cash Document Line CZP"
         {
             CaptionClass = '1,2,2';
             Caption = 'Shortcut Dimension 2 Code';
-            TableRelation = "Dimension Value".Code where("Global Dimension No." = const(2));
+            TableRelation = "Dimension Value".Code where("Global Dimension No." = const(2),
+                                                          Blocked = const(false));
             DataClassification = CustomerContent;
 
             trigger OnValidate()
@@ -573,7 +571,6 @@ table 11733 "Cash Document Line CZP"
                             Validate("Shortcut Dimension 2 Code", CashDeskEventCZP."Global Dimension 2 Code");
                         Validate("Gen. Document Type", CashDeskEventCZP."Gen. Document Type".AsInteger());
                         "Currency Code" := CashDocumentHeaderCZP."Currency Code";
-                        Validate("Salespers./Purch. Code", CashDocumentHeaderCZP."Salespers./Purch. Code");
 
                         CreateDimFromDefaultDim(Rec.FieldNo("Cash Desk Event"));
                     end;
@@ -596,6 +593,41 @@ table 11733 "Cash Document Line CZP"
             TableRelation = "Reason Code";
             DataClassification = CustomerContent;
         }
+        field(45; "Project No."; Code[20])
+        {
+            Caption = 'Project No.';
+            TableRelation = Job;
+            DataClassification = CustomerContent;
+
+            trigger OnValidate()
+            var
+                Job: Record Job;
+                IsHandled: Boolean;
+            begin
+                IsHandled := false;
+                OnValidateProjectNo(Rec, xRec, IsHandled);
+                if IsHandled then
+                    exit;
+
+                if "Project No." = xRec."Project No." then
+                    exit;
+
+                if "Project No." = '' then begin
+                    Validate("Project Task No.", '');
+                    CreateDimFromDefaultDim(FieldNo("Project No."));
+                    exit;
+                end;
+
+                if "Project No." <> xRec."Project No." then
+                    Validate("Project Task No.", '');
+
+                Job.Get("Project No.");
+                Job.TestBlocked();
+
+                CheckAccountTypeOnProjectValidation();
+                CreateDimFromDefaultDim(FieldNo("Project No."));
+            end;
+        }
         field(51; "VAT Base Amount"; Decimal)
         {
             AutoFormatExpression = "Currency Code";
@@ -605,16 +637,21 @@ table 11733 "Cash Document Line CZP"
             DataClassification = CustomerContent;
 
             trigger OnValidate()
+            var
+                TotalCashDocumentLineCZP: Record "Cash Document Line CZP";
             begin
                 GetCashDocumentHeaderCZP();
+                CalcTotalAmounts(TotalCashDocumentLineCZP);
                 "VAT Base Amount" := Round("VAT Base Amount", Currency."Amount Rounding Precision");
 
                 case "VAT Calculation Type" of
                     "VAT Calculation Type"::"Normal VAT",
                   "VAT Calculation Type"::"Reverse Charge VAT":
                         "VAT Amount" :=
-                          Round("VAT Base Amount" * ("VAT %" / 100),
-                            Currency."Amount Rounding Precision", Currency.VATRoundingDirection());
+                            Round(
+                                (TotalCashDocumentLineCZP."VAT Base Amount" + "VAT Base Amount") * ("VAT %" / 100),
+                                Currency."Amount Rounding Precision", Currency.VATRoundingDirection()) -
+                            TotalCashDocumentLineCZP."VAT Amount";
                     "VAT Calculation Type"::"Full VAT":
                         if "VAT Base Amount" <> 0 then
                             FieldError("VAT Base Amount", StrSubstNo(MustBeZeroErr, FieldCaption("VAT Calculation Type"),
@@ -643,14 +680,21 @@ table 11733 "Cash Document Line CZP"
             DataClassification = CustomerContent;
 
             trigger OnValidate()
+            var
+                TotalCashDocumentLineCZP: Record "Cash Document Line CZP";
             begin
                 GetCashDocumentHeaderCZP();
+                CalcTotalAmounts(TotalCashDocumentLineCZP);
                 "Amount Including VAT" := Round("Amount Including VAT", Currency."Amount Rounding Precision");
 
                 case "VAT Calculation Type" of
                     "VAT Calculation Type"::"Normal VAT",
                   "VAT Calculation Type"::"Reverse Charge VAT":
-                        "VAT Amount" := Round("Amount Including VAT" * "VAT %" / (100 + "VAT %"), Currency."Amount Rounding Precision");
+                        "VAT Amount" :=
+                            Round(
+                                (TotalCashDocumentLineCZP."Amount Including VAT" + "Amount Including VAT") * "VAT %" / (100 + "VAT %"),
+                                Currency."Amount Rounding Precision", Currency.VATRoundingDirection()) -
+                            TotalCashDocumentLineCZP."VAT Amount";
                     "VAT Calculation Type"::"Full VAT":
                         "VAT Base Amount" := 0;
                 end;
@@ -725,6 +769,8 @@ table 11733 "Cash Document Line CZP"
                 end;
                 "VAT Difference" := "VAT Amount" - CalcVATAmount();
 
+                ValidateNonDeductibleVATPct();
+
                 if CurrFieldNo = FieldNo("VAT Amount") then
                     if Abs("VAT Difference") > Currency."Max. VAT Difference Allowed" then
                         Error(MustNotBeMoreThanErr, FieldCaption("VAT Difference"), Currency."Max. VAT Difference Allowed");
@@ -772,14 +818,21 @@ table 11733 "Cash Document Line CZP"
             Editable = false;
             DataClassification = CustomerContent;
         }
+#if not CLEANSCHEMA28
         field(62; "VAT Difference (LCY)"; Decimal)
         {
             Caption = 'VAT Difference (LCY)';
             DataClassification = CustomerContent;
-            ObsoleteState = Pending;
             ObsoleteReason = 'Moved to Core Localization Pack for Czech.';
+#if CLEAN25
+            ObsoleteState = Removed;
+            ObsoleteTag = '28.0';
+#else
+            ObsoleteState = Pending;
             ObsoleteTag = '18.0';
+#endif
         }
+#endif
         field(63; "System-Created Entry"; Boolean)
         {
             Caption = 'System-Created Entry';
@@ -790,6 +843,12 @@ table 11733 "Cash Document Line CZP"
         {
             Caption = 'Gen. Posting Type';
             DataClassification = CustomerContent;
+
+            trigger OnValidate()
+            begin
+                if "Gen. Posting Type" <> "Gen. Posting Type"::" " then
+                    Validate("VAT Prod. Posting Group");
+            end;
         }
         field(70; "VAT Calculation Type"; Enum "Tax Calculation Type")
         {
@@ -816,26 +875,26 @@ table 11733 "Cash Document Line CZP"
 
             trigger OnValidate()
             begin
-                if VATPostingSetup.Get("VAT Bus. Posting Group", "VAT Prod. Posting Group") then begin
-                    "VAT %" := VATPostingSetup."VAT %";
-                    "VAT Calculation Type" := VATPostingSetup."VAT Calculation Type";
-                    "VAT Identifier" := VATPostingSetup."VAT Identifier";
-                    case "VAT Calculation Type" of
-                        "VAT Calculation Type"::"Reverse Charge VAT",
-                        "VAT Calculation Type"::"Sales Tax":
-                            "VAT %" := 0;
-                        "VAT Calculation Type"::"Full VAT":
-                            begin
-                                TestField("Account Type", "Account Type"::"G/L Account");
-                                VATPostingSetup.TestField("Sales VAT Account");
-                                TestField("Account No.", VATPostingSetup."Sales VAT Account");
-                            end;
+                "VAT %" := 0;
+                "VAT Calculation Type" := "VAT Calculation Type"::"Normal VAT";
+                "VAT Identifier" := '';
+                if "Gen. Posting Type" <> "Gen. Posting Type"::" " then
+                    if VATPostingSetup.Get("VAT Bus. Posting Group", "VAT Prod. Posting Group") then begin
+                        "VAT %" := VATPostingSetup."VAT %";
+                        "VAT Calculation Type" := VATPostingSetup."VAT Calculation Type";
+                        "VAT Identifier" := VATPostingSetup."VAT Identifier";
+                        case "VAT Calculation Type" of
+                            "VAT Calculation Type"::"Reverse Charge VAT",
+                            "VAT Calculation Type"::"Sales Tax":
+                                "VAT %" := 0;
+                            "VAT Calculation Type"::"Full VAT":
+                                begin
+                                    TestField("Account Type", "Account Type"::"G/L Account");
+                                    VATPostingSetup.TestField("Sales VAT Account");
+                                    TestField("Account No.", VATPostingSetup."Sales VAT Account");
+                                end;
+                        end;
                     end;
-                end else begin
-                    "VAT %" := 0;
-                    "VAT Calculation Type" := "VAT Calculation Type"::"Normal VAT";
-                    "VAT Identifier" := '';
-                end;
                 Validate(Amount);
             end;
         }
@@ -848,6 +907,14 @@ table 11733 "Cash Document Line CZP"
             begin
                 TestField("Gen. Posting Type", "Gen. Posting Type"::Purchase);
             end;
+        }
+        field(80; "Attached to Line No."; Integer)
+        {
+            Caption = 'Attached to Line No.';
+            DataClassification = CustomerContent;
+            Editable = false;
+            TableRelation = "Cash Document Line CZP"."Line No." where("Cash Desk No." = field("Cash Desk No."),
+                                                                    "Cash Document No." = field("Cash Document No."));
         }
         field(90; "FA Posting Type"; Enum "Cash Document FA Post.Type CZP")
         {
@@ -911,6 +978,66 @@ table 11733 "Cash Document Line CZP"
             Editable = false;
             DataClassification = CustomerContent;
         }
+        field(110; "Non-Deductible VAT %"; Decimal)
+        {
+            Caption = 'Non-Deductible VAT %';
+            DecimalPlaces = 0 : 5;
+            Editable = false;
+            DataClassification = CustomerContent;
+
+            trigger OnValidate()
+            begin
+                CalculateNonDeductibleVAT();
+            end;
+        }
+        field(111; "Non-Deductible VAT Base"; Decimal)
+        {
+            AutoFormatExpression = Rec."Currency Code";
+            Caption = 'Non-Deductible VAT Base';
+            Editable = false;
+            DataClassification = CustomerContent;
+        }
+        field(112; "Non-Deductible VAT Amount"; Decimal)
+        {
+            AutoFormatExpression = Rec."Currency Code";
+            Caption = 'Non-Deductible VAT Amount';
+            Editable = false;
+            DataClassification = CustomerContent;
+        }
+        field(113; "Non-Deductible VAT Base LCY"; Decimal)
+        {
+            AutoFormatExpression = Rec."Currency Code";
+            Caption = 'Non-Deductible VAT Base LCY';
+            Editable = false;
+            DataClassification = CustomerContent;
+        }
+        field(114; "Non-Deductible VAT Amount LCY"; Decimal)
+        {
+            AutoFormatExpression = Rec."Currency Code";
+            Caption = 'Non-Deductible VAT Amount LCY';
+            Editable = false;
+            DataClassification = CustomerContent;
+        }
+        field(115; "Non-Deductible VAT Base ACY"; Decimal)
+        {
+            AutoFormatExpression = Rec."Currency Code";
+            Caption = 'Non-Deductible VAT Base ACY';
+            Editable = false;
+            DataClassification = CustomerContent;
+        }
+        field(116; "Non-Deductible VAT Amount ACY"; Decimal)
+        {
+            AutoFormatExpression = Rec."Currency Code";
+            Caption = 'Non-Deductible VAT Amount ACY';
+            Editable = false;
+            DataClassification = CustomerContent;
+        }
+        field(117; "Non-Deductible VAT Diff."; Decimal)
+        {
+            Caption = 'Non-Deductible VAT Difference';
+            Editable = false;
+            DataClassification = CustomerContent;
+        }
         field(480; "Dimension Set ID"; Integer)
         {
             Caption = 'Dimension Set ID';
@@ -928,18 +1055,144 @@ table 11733 "Cash Document Line CZP"
                 DimensionManagement.UpdateGlobalDimFromDimSetID("Dimension Set ID", "Shortcut Dimension 1 Code", "Shortcut Dimension 2 Code");
             end;
         }
-        field(31001; "Advance Letter Link Code"; Code[30])
+        field(1001; "Project Task No."; Code[20])
         {
-            Caption = 'Advance Letter Link Code';
+            Caption = 'Project Task No.';
+            TableRelation = "Job Task"."Job Task No." where("Job No." = field("Project No."));
             DataClassification = CustomerContent;
-            ObsoleteState = Removed;
-            ObsoleteReason = 'Remove after Advance Payment Localization for Czech will be implemented.';
-            ObsoleteTag = '22.0';
+
+            trigger OnValidate()
+            var
+                JobTask: Record "Job Task";
+                IsHandled: Boolean;
+            begin
+                IsHandled := false;
+                OnBeforeValidateProjectTaskNo(Rec, xRec, IsHandled);
+                if IsHandled then
+                    exit;
+
+                if "Project Task No." <> xRec."Project Task No." then
+                    Validate("Project Planning Line No.", 0);
+                if "Project Task No." = '' then begin
+                    ClearJobRelatedAmounts();
+                    exit;
+                end;
+
+                TestField("Project No.");
+                JobTask.Get("Project No.", "Project Task No.");
+                JobTask.TestField("Job Task Type", JobTask."Job Task Type"::Posting);
+            end;
+        }
+        field(1004; "Project Quantity"; Decimal)
+        {
+            AccessByPermission = TableData Job = R;
+            Caption = 'Project Quantity';
+            DecimalPlaces = 0 : 5;
+            DataClassification = CustomerContent;
 
             trigger OnValidate()
             begin
-                UpdateEETTransaction();
+                if ProjectTaskIsSet() then
+                    if "Project Planning Line No." <> 0 then
+                        Validate("Project Planning Line No.");
             end;
+        }
+        field(1009; "Project Line Type"; Enum "Job Line Type")
+        {
+            AccessByPermission = TableData Job = R;
+            Caption = 'Project Line Type';
+            DataClassification = CustomerContent;
+
+            trigger OnValidate()
+            var
+                ChangeProjectLineTypeErr: Label '%1 cannot be changed when %2 is set.', Comment = '%1 = FieldCaption("Project Line Type"), %2 = FieldCaption("Project Planning Line No.")';
+            begin
+                if "Project Planning Line No." <> 0 then
+                    Error(ChangeProjectLineTypeErr, FieldCaption("Project Line Type"), FieldCaption("Project Planning Line No."));
+            end;
+        }
+        field(1010; "Project Unit Price"; Decimal)
+        {
+            AccessByPermission = TableData Job = R;
+            AutoFormatExpression = "Currency Code";
+            AutoFormatType = 2;
+            Caption = 'Project Unit Price';
+            DataClassification = CustomerContent;
+
+        }
+        field(1020; "Project Planning Line No."; Integer)
+        {
+            AccessByPermission = TableData Job = R;
+            BlankZero = true;
+            Caption = 'Project Planning Line No.';
+            DataClassification = CustomerContent;
+
+            trigger OnLookup()
+            var
+                JobPlanningLine: Record "Job Planning Line";
+            begin
+                JobPlanningLine.SetRange("Job No.", "Project No.");
+                JobPlanningLine.SetRange("Job Task No.", "Project Task No.");
+                JobPlanningLine.SetRange(Type, JobPlanningLine.Type::"G/L Account");
+                JobPlanningLine.SetRange("No.", "Account No.");
+                JobPlanningLine.SetRange("Usage Link", true);
+                JobPlanningLine.SetRange("System-Created Entry", false);
+                OnLookupProjectPlanningLineNoOnAfterJobPlanningLineSetFilter(JobPlanningLine, Rec);
+
+                if Page.RunModal(0, JobPlanningLine) = Action::LookupOK then
+                    Validate("Project Planning Line No.", JobPlanningLine."Line No.");
+            end;
+
+            trigger OnValidate()
+            var
+                JobPlanningLine: Record "Job Planning Line";
+                IsHandled: Boolean;
+            begin
+                IsHandled := false;
+                OnBeforeValidateProjectPlanningLineNo(Rec, IsHandled);
+                if IsHandled then
+                    exit;
+
+                if "Project Planning Line No." <> 0 then begin
+                    JobPlanningLine.Get("Project No.", "Project Task No.", "Project Planning Line No.");
+                    JobPlanningLine.TestField("Job No.", "Project No.");
+                    JobPlanningLine.TestField("Job Task No.", "Project Task No.");
+                    JobPlanningLine.TestField(Type, JobPlanningLine.Type::"G/L Account");
+                    JobPlanningLine.TestField("No.", "Account No.");
+                    JobPlanningLine.TestField("Usage Link", true);
+                    JobPlanningLine.TestField("System-Created Entry", false);
+                    "Project Line Type" := JobPlanningLine.ConvertToJobLineType();
+                end;
+            end;
+        }
+        field(2675; "Selected Alloc. Account No."; Code[20])
+        {
+            Caption = 'Allocation Account No.';
+            DataClassification = CustomerContent;
+            TableRelation = "Allocation Account";
+        }
+        field(2677; "Alloc. Acc. Modified by User"; Boolean)
+        {
+            Caption = 'Allocation Account Distributions Modified';
+            FieldClass = FlowField;
+            CalcFormula = exist("Alloc. Acc. Manual Override" where("Parent System Id" = field(SystemId), "Parent Table Id" = const(Database::"Cash Document Line CZP")));
+        }
+        field(2678; "Allocation Account No."; Code[20])
+        {
+            Caption = 'Posting Allocation Account No.';
+            DataClassification = CustomerContent;
+            TableRelation = "Allocation Account";
+        }
+        field(7011; "Attached Lines Count"; Integer)
+        {
+            CalcFormula = count("Cash Document Line CZP" where("Cash Desk No." = field("Cash Desk No."),
+                                                    "Cash Document No." = field("Cash Document No."),
+                                                    "Attached to Line No." = field("Line No."),
+                                                    Amount = filter(<> 0)));
+            Caption = 'Attached Lines Count';
+            Editable = false;
+            FieldClass = FlowField;
+            BlankZero = true;
         }
     }
 
@@ -954,6 +1207,21 @@ table 11733 "Cash Document Line CZP"
             SumIndexFields = Amount, "Amount (LCY)", "Amount Including VAT", "Amount Including VAT (LCY)", "VAT Base Amount", "VAT Base Amount (LCY)", "VAT Amount", "VAT Amount (LCY)";
         }
     }
+
+    trigger OnDelete()
+    var
+        CashDocumentLineCZP: Record "Cash Document Line CZP";
+    begin
+        if "Line No." <> 0 then begin
+            CashDocumentLineCZP.Reset();
+            CashDocumentLineCZP.SetRange("Cash Desk No.", "Cash Desk No.");
+            CashDocumentLineCZP.SetRange("Cash Document No.", "Cash Document No.");
+            CashDocumentLineCZP.SetRange("Attached to Line No.", "Line No.");
+            CashDocumentLineCZP.SetFilter("Line No.", '<>%1', "Line No.");
+            OnDeleteOnAfterSetCashDocumentLineFilters(CashDocumentLineCZP);
+            CashDocumentLineCZP.DeleteAll(true);
+        end;
+    end;
 
     trigger OnInsert()
     begin
@@ -1002,8 +1270,14 @@ table 11733 "Cash Document Line CZP"
 
     procedure ShowDimensions()
     var
+        IsHandled: Boolean;
         ThreePlacehodersTok: Label '%1 %2 %3', Locked = true;
     begin
+        IsHandled := false;
+        OnBeforeShowDimensions(Rec, xRec, IsHandled);
+        if IsHandled then
+            exit;
+
         "Dimension Set ID" := DimensionManagement.EditDimensionSet("Dimension Set ID", StrSubstNo(ThreePlacehodersTok, TableCaption, "Cash Document No.", "Line No."));
         DimensionManagement.UpdateGlobalDimFromDimSetID("Dimension Set ID", "Shortcut Dimension 1 Code", "Shortcut Dimension 2 Code");
     end;
@@ -1019,6 +1293,7 @@ table 11733 "Cash Document Line CZP"
     local procedure InitDefaultDimensionSources(var DefaultDimSource: List of [Dictionary of [Integer, Code[20]]]; FieldNo: Integer)
     begin
         DimensionManagement.AddDimSource(DefaultDimSource, TypeToTableID("Account Type".AsInteger()), Rec."Account No.", FieldNo = Rec.FieldNo("Account No."));
+        DimensionManagement.AddDimSource(DefaultDimSource, Database::Job, Rec."Project No.", FieldNo = Rec.FieldNo("Project No."));
         DimensionManagement.AddDimSource(DefaultDimSource, Database::"Salesperson/Purchaser", Rec."Salespers./Purch. Code", FieldNo = Rec.FieldNo("Salespers./Purch. Code"));
         DimensionManagement.AddDimSource(DefaultDimSource, Database::"Responsibility Center", Rec."Responsibility Center", FieldNo = Rec.FieldNo("Responsibility Center"));
         DimensionManagement.AddDimSource(DefaultDimSource, Database::"Cash Desk Event CZP", Rec."Cash Desk Event", FieldNo = Rec.FieldNo("Cash Desk Event"));
@@ -1100,6 +1375,8 @@ table 11733 "Cash Document Line CZP"
             Validate("Amount Including VAT", Amount)
         else
             Validate("VAT Base Amount", Amount);
+
+        ValidateNonDeductibleVATPct();
 
         if (Amount <> xRec.Amount) and (xRec.Amount <> 0) or (xRec."Applies-To Doc. No." <> '') or (xRec."Applies-to ID" <> '') then begin
             CashDocumentPostCZP.InitGenJnlLine(CashDocumentHeaderCZP, Rec);
@@ -1659,77 +1936,216 @@ table 11733 "Cash Document Line CZP"
 
     procedure CalcRelatedAmountToApply(): Decimal
     var
-        TempCrossApplicationBufferCZL: Record "Cross Application Buffer CZL" temporary;
+        CrossApplicationBufferCZL: Record "Cross Application Buffer CZL";
     begin
-        FindRelatedAmountToApply(TempCrossApplicationBufferCZL);
-        TempCrossApplicationBufferCZL.CalcSums("Amount (LCY)");
-        GetCashDocumentHeaderCZP();
-        case CashDocumentHeaderCZP."Document Type" of
-            CashDocumentHeaderCZP."Document Type"::Receipt:
-                exit(TempCrossApplicationBufferCZL."Amount (LCY)");
-            CashDocumentHeaderCZP."Document Type"::Withdrawal:
-                exit(-TempCrossApplicationBufferCZL."Amount (LCY)");
-        end
+        CollectSuggestedApplication(CrossApplicationBufferCZL);
+        CrossApplicationBufferCZL.CalcSums("Amount (LCY)");
+        exit(SignAmount() * -CrossApplicationBufferCZL."Amount (LCY)");
     end;
 
     procedure DrillDownRelatedAmountToApply()
     var
-        TempCrossApplicationBufferCZL: Record "Cross Application Buffer CZL" temporary;
+        CrossApplicationBufferCZL: Record "Cross Application Buffer CZL";
     begin
-        FindRelatedAmountToApply(TempCrossApplicationBufferCZL);
-        Page.Run(Page::"Cross Application CZL", TempCrossApplicationBufferCZL);
+        CollectSuggestedApplication(CrossApplicationBufferCZL);
+        Page.Run(Page::"Cross Application CZL", CrossApplicationBufferCZL);
     end;
 
-    local procedure FindRelatedAmountToApply(var TempCrossApplicationBufferCZL: Record "Cross Application Buffer CZL" temporary)
+    local procedure CollectSuggestedApplication(var CrossApplicationBufferCZL: Record "Cross Application Buffer CZL")
     var
         CustLedgerEntry: Record "Cust. Ledger Entry";
         VendorLedgerEntry: Record "Vendor Ledger Entry";
         EmployeeLedgerEntry: Record "Employee Ledger Entry";
+#if not CLEAN25
         CrossApplicationMgtCZL: Codeunit "Cross Application Mgt. CZL";
         AppliesToAdvanceLetterNo: Code[20];
+#endif
     begin
-        if Rec."Account No." = '' then
+        if "Account No." = '' then
             exit;
 
-        case Rec."Account Type" of
-            Rec."Account Type"::Customer:
-                if Rec."Applies-to Doc. No." <> '' then begin
-                    CustLedgerEntry.SetCurrentKey("Customer No.");
-                    CustLedgerEntry.SetRange("Customer No.", Rec."Account No.");
-                    CustLedgerEntry.SetRange("Document Type", Rec."Applies-to Doc. Type");
-                    CustLedgerEntry.SetRange("Document No.", Rec."Applies-to Doc. No.");
-                    if CustLedgerEntry.FindFirst() then
-                        CrossApplicationMgtCZL.OnGetSuggestedAmountForCustLedgerEntry(CustLedgerEntry, TempCrossApplicationBufferCZL,
-                                                                                      Database::"Cash Document Line CZP", Rec."Cash Document No.", Rec."Line No.");
-                end;
-            Rec."Account Type"::Vendor:
-                begin
-                    if Rec."Applies-to Doc. No." <> '' then begin
-                        VendorLedgerEntry.SetCurrentKey("Vendor No.");
-                        VendorLedgerEntry.SetRange("Vendor No.", Rec."Account No.");
-                        VendorLedgerEntry.SetRange("Document Type", Rec."Applies-to Doc. Type");
-                        VendorLedgerEntry.SetRange("Document No.", Rec."Applies-to Doc. No.");
-                        if VendorLedgerEntry.FindFirst() then
-                            CrossApplicationMgtCZL.OnGetSuggestedAmountForVendLedgerEntry(VendorLedgerEntry, TempCrossApplicationBufferCZL,
-                                                                                          Database::"Cash Document Line CZP", Rec."Cash Document No.", Rec."Line No.");
+        if "Applies-to Doc. No." <> '' then
+            case "Account Type" of
+                "Account Type"::Customer:
+                    begin
+                        CustLedgerEntry.SetCurrentKey("Customer No.");
+                        CustLedgerEntry.SetRange("Customer No.", "Account No.");
+                        CustLedgerEntry.SetRange("Document Type", "Applies-to Doc. Type");
+                        CustLedgerEntry.SetRange("Document No.", "Applies-to Doc. No.");
+                        if CustLedgerEntry.FindFirst() then
+                            CustLedgerEntry.CollectSuggestedApplicationCZL(Rec, CrossApplicationBufferCZL);
                     end;
-
-                    OnBeforeFindRelatedAmoutToApply(Rec, AppliesToAdvanceLetterNo);
-                    if AppliesToAdvanceLetterNo <> '' then
-                        CrossApplicationMgtCZL.OnGetSuggestedAmountForPurchAdvLetterHeader(AppliesToAdvanceLetterNo, TempCrossApplicationBufferCZL,
-                                                                                           Database::"Cash Document Line CZP", Rec."Cash Document No.", Rec."Line No.");
-                end;
-            Rec."Account Type"::Employee:
-                if Rec."Applies-to Doc. No." <> '' then begin
-                    EmployeeLedgerEntry.SetCurrentKey("Employee No.");
-                    EmployeeLedgerEntry.SetRange("Employee No.", Rec."Account No.");
-                    EmployeeLedgerEntry.SetRange("Document Type", Rec."Applies-to Doc. Type");
-                    EmployeeLedgerEntry.SetRange("Document No.", Rec."Applies-to Doc. No.");
-                    if EmployeeLedgerEntry.FindFirst() then
-                        CrossApplicationMgtCZL.OnGetSuggestedAmountForEmplLedgerEntry(EmployeeLedgerEntry, TempCrossApplicationBufferCZL,
-                                                                                      Database::"Cash Document Line CZP", Rec."Cash Document No.", Rec."Line No.");
-                end;
+                "Account Type"::Vendor:
+                    begin
+                        VendorLedgerEntry.SetCurrentKey("Vendor No.");
+                        VendorLedgerEntry.SetRange("Vendor No.", "Account No.");
+                        VendorLedgerEntry.SetRange("Document Type", "Applies-to Doc. Type");
+                        VendorLedgerEntry.SetRange("Document No.", "Applies-to Doc. No.");
+                        if VendorLedgerEntry.FindFirst() then
+                            VendorLedgerEntry.CollectSuggestedApplicationCZL(Rec, CrossApplicationBufferCZL);
+                    end;
+                "Account Type"::Employee:
+                    begin
+                        EmployeeLedgerEntry.SetCurrentKey("Employee No.");
+                        EmployeeLedgerEntry.SetRange("Employee No.", "Account No.");
+                        EmployeeLedgerEntry.SetRange("Document Type", "Applies-to Doc. Type");
+                        EmployeeLedgerEntry.SetRange("Document No.", "Applies-to Doc. No.");
+                        if EmployeeLedgerEntry.FindFirst() then
+                            EmployeeLedgerEntry.CollectSuggestedApplicationCZL(Rec, CrossApplicationBufferCZL);
+                    end;
+            end;
+#if not CLEAN25
+#pragma warning disable AL0432
+        if "Account Type" = "Account Type"::Vendor then begin
+            OnBeforeFindRelatedAmoutToApply(Rec, AppliesToAdvanceLetterNo);
+            if AppliesToAdvanceLetterNo <> '' then
+                CrossApplicationMgtCZL.OnGetSuggestedAmountForPurchAdvLetterHeader(
+                    AppliesToAdvanceLetterNo, CrossApplicationBufferCZL,
+                    Database::"Cash Document Line CZP", "Cash Document No.", "Line No.");
         end;
+#pragma warning restore AL0432
+#endif
+
+        OnAfterCollectSuggestedApplication(Rec, CrossApplicationBufferCZL);
+    end;
+
+    local procedure ValidateNonDeductibleVATPct()
+    var
+        GenJournalLine: Record "Gen. Journal Line";
+        NonDeductibleVAT: Codeunit "Non-Deductible VAT";
+    begin
+        GetCashDocumentHeaderCZP();
+        InitGenJournalLine(GenJournalLine);
+        NonDeductibleVAT.ValidateNonDedVATPctInGenJnlLine(GenJournalLine);
+        CopyNonDeductibleVATFromGenJournalLine(GenJournalLine);
+    end;
+
+    local procedure CalculateNonDeductibleVAT()
+    var
+        GenJournalLine: Record "Gen. Journal Line";
+        NonDeductibleVAT: Codeunit "Non-Deductible VAT";
+    begin
+        GetCashDocumentHeaderCZP();
+        InitGenJournalLine(GenJournalLine);
+        NonDeductibleVAT.Calculate(GenJournalLine, Currency);
+        CopyNonDeductibleVATFromGenJournalLine(GenJournalLine);
+    end;
+
+    local procedure CopyNonDeductibleVATFromGenJournalLine(GenJournalLine: Record "Gen. Journal Line")
+    begin
+        "Non-Deductible VAT %" := GenJournalLine."Non-Deductible VAT %";
+        "Non-Deductible VAT Base" := GenJournalLine."Non-Deductible VAT Base";
+        "Non-Deductible VAT Amount" := GenJournalLine."Non-Deductible VAT Amount";
+        "Non-Deductible VAT Base LCY" := GenJournalLine."Non-Deductible VAT Base LCY";
+        "Non-Deductible VAT Amount LCY" := GenJournalLine."Non-Deductible VAT Amount LCY";
+        "Non-Deductible VAT Base ACY" := GenJournalLine."Non-Deductible VAT Base ACY";
+        "Non-Deductible VAT Amount ACY" := GenJournalLine."Non-Deductible VAT Amount ACY";
+        "Non-Deductible VAT Diff." := GenJournalLine."Non-Deductible VAT Diff.";
+    end;
+
+    local procedure InitGenJournalLine(var GenJournalLine: Record "Gen. Journal Line")
+    begin
+        GetCashDocumentHeaderCZP();
+        GenJournalLine.Init();
+        GenJournalLine."VAT Calculation Type" := "VAT Calculation Type";
+        GenJournalLine."VAT Bus. Posting Group" := "VAT Bus. Posting Group";
+        GenJournalLine."VAT Prod. Posting Group" := "VAT Prod. Posting Group";
+        GenJournalLine."Gen. Posting Type" := "Gen. Posting Type";
+        GenJournalLine."Currency Code" := CashDocumentHeaderCZP."Currency Code";
+        GenJournalLine."Currency Factor" := CashDocumentHeaderCZP."Currency Factor";
+        GenJournalLine."Posting Date" := CashDocumentHeaderCZP."Posting Date";
+        GenJournalLine."VAT Reporting Date" := CashDocumentHeaderCZP."VAT Date";
+        GenJournalLine.Amount := "Amount Including VAT";
+        GenJournalLine."VAT Amount" := "VAT Amount";
+        GenJournalLine."VAT Base Amount" := "VAT Base Amount";
+        GenJournalLine."Non-Deductible VAT %" := "Non-Deductible VAT %";
+        OnAfterInitGenJournalLine(GenJournalLine);
+    end;
+
+    local procedure CheckEmptyAccount()
+    var
+        IsHandled: Boolean;
+    begin
+        IsHandled := false;
+        OnBeforeCheckEmptyAccount(Rec, IsHandled);
+        if IsHandled then
+            exit;
+
+        TestField("Account Type");
+        TestField("Account No.");
+    end;
+
+    procedure GetAllocationAccount(var AllocationAccount: Record "Allocation Account"): Boolean
+    begin
+        if "Selected Alloc. Account No." <> '' then
+            exit(AllocationAccount.Get("Selected Alloc. Account No."));
+
+        if "Account Type" = "Account Type"::"Allocation Account" then
+            exit(AllocationAccount.Get("Account No."));
+
+        exit(false);
+    end;
+
+    local procedure CalcTotalAmounts(var TotalCashDocumentLineCZP: Record "Cash Document Line CZP")
+    begin
+        if "Allocation Account No." = '' then
+            exit;
+        TotalCashDocumentLineCZP.Init();
+        if ("VAT Calculation Type" = "VAT Calculation Type"::"Sales Tax") or
+           (("VAT Calculation Type" in
+            ["VAT Calculation Type"::"Normal VAT", "VAT Calculation Type"::"Reverse Charge VAT"]) and ("VAT %" <> 0))
+        then begin
+            TotalCashDocumentLineCZP.SetRange("Cash Desk No.", "Cash Desk No.");
+            TotalCashDocumentLineCZP.SetRange("Cash Document No.", "Cash Document No.");
+            TotalCashDocumentLineCZP.SetFilter("Line No.", '<>%1', "Line No.");
+            TotalCashDocumentLineCZP.SetRange("VAT Identifier", "VAT Identifier");
+            TotalCashDocumentLineCZP.SetFilter("VAT %", '<>%1', 0);
+            TotalCashDocumentLineCZP.SetRange("Allocation Account No.", "Allocation Account No.");
+            if not TotalCashDocumentLineCZP.IsEmpty() then
+                TotalCashDocumentLineCZP.CalcSums("VAT Base Amount", "Amount Including VAT", "VAT Amount");
+        end;
+    end;
+
+    local procedure ClearJobRelatedAmounts()
+    var
+        IsHandled: Boolean;
+    begin
+        IsHandled := false;
+        OnBeforeClearProjectRelatedAmounts(Rec, IsHandled);
+        if IsHandled then
+            exit;
+
+        "Project Quantity" := 0;
+        "Project Unit Price" := 0;
+    end;
+
+    procedure ProjectTaskIsSet() Result: Boolean
+    var
+        IsHandled: Boolean;
+    begin
+        IsHandled := false;
+        OnBeforeProjectTaskIsSet(Rec, Result, IsHandled);
+        if IsHandled then
+            exit(Result);
+
+        exit(("Project No." <> '') and ("Project Task No." <> '') and ("Account Type" = "Account Type"::"G/L Account"));
+    end;
+
+    local procedure CheckAccountTypeOnProjectValidation()
+    var
+        IsHandled: Boolean;
+    begin
+        IsHandled := false;
+        OnBeforeCheckAccountTypeOnProjectValidation(IsHandled, Rec);
+        if IsHandled then
+            exit;
+
+        TestField("Account Type", "Account Type"::"G/L Account");
+    end;
+
+    procedure IsExtendedText(): Boolean
+    begin
+        exit(("Account Type" = "Account Type"::" ") and ("Attached to Line No." <> 0) and (Amount = 0));
     end;
 
     [IntegrationEvent(false, false)]
@@ -1746,11 +2162,13 @@ table 11733 "Cash Document Line CZP"
     local procedure OnAfterIsEETCashRegister(CashDocumentLineCZP: Record "Cash Document Line CZP"; var EETCashRegister: Boolean)
     begin
     end;
-
+#if not CLEAN25
+    [Obsolete('The event is obsolete and will be removed in the future version. Use OnAfterCollectSuggestedApplication instead.', '25.0')]
     [IntegrationEvent(false, false)]
     local procedure OnBeforeFindRelatedAmoutToApply(CashDocumentLineCZP: Record "Cash Document Line CZP"; var AppliesToAdvanceLetterNo: Code[20]);
     begin
     end;
+#endif
 
     [IntegrationEvent(false, false)]
     local procedure OnBeforeCreateDim(var CashDocumentLineCZP: Record "Cash Document Line CZP"; var IsHandled: Boolean)
@@ -1824,6 +2242,66 @@ table 11733 "Cash Document Line CZP"
 
     [IntegrationEvent(false, false)]
     local procedure OnAfterSignAmount(var CashDocumentLineCZP: Record "Cash Document Line CZP"; var Sign: Integer)
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnAfterInitGenJournalLine(var GenJournalLine: Record "Gen. Journal Line")
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnAfterCollectSuggestedApplication(CashDocumentLineCZP: Record "Cash Document Line CZP"; var CrossApplicationBufferCZL: Record "Cross Application Buffer CZL")
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnBeforeCheckEmptyAccount(CashDocumentLineCZP: Record "Cash Document Line CZP"; var IsHandled: Boolean)
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnBeforeShowDimensions(var CashDocumentLineCZP: Record "Cash Document Line CZP"; xCashDocumentLineCZP: Record "Cash Document Line CZP"; var IsHandled: Boolean)
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnValidateProjectNo(var CashDocumentLineCZP: Record "Cash Document Line CZP"; xCashDocumentLineCZP: Record "Cash Document Line CZP"; var IsHandled: Boolean)
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnBeforeValidateProjectTaskNo(var CashDocumentLineCZP: Record "Cash Document Line CZP"; xCashDocumentLineCZP: Record "Cash Document Line CZP"; var IsHandled: Boolean)
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnBeforeClearProjectRelatedAmounts(var CashDocumentLineCZP: Record "Cash Document Line CZP"; var IsHandled: Boolean)
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnBeforeProjectTaskIsSet(CashDocumentLineCZP: Record "Cash Document Line CZP"; var Result: Boolean; var IsHandled: Boolean)
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnLookupProjectPlanningLineNoOnAfterJobPlanningLineSetFilter(var JobPlanningLine: Record "Job Planning Line"; var CashDocumentLineCZP: Record "Cash Document Line CZP");
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnBeforeValidateProjectPlanningLineNo(var CashDocumentLineCZP: Record "Cash Document Line CZP"; var IsHandled: Boolean);
+    begin
+    end;
+
+    [IntegrationEvent(true, false)]
+    local procedure OnBeforeCheckAccountTypeOnProjectValidation(var IsHandled: Boolean; var CashDocumentLineCZP: Record "Cash Document Line CZP")
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnDeleteOnAfterSetCashDocumentLineFilters(var CashDocumentLineCZP: Record "Cash Document Line CZP")
     begin
     end;
 }

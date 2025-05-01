@@ -33,11 +33,23 @@ page 30157 "Shpfy Company Card"
                     ApplicationArea = All;
                     ToolTip = 'Specifies the company''s name.';
                 }
+                field("External Id"; Rec."External Id")
+                {
+                    ApplicationArea = All;
+                    ToolTip = 'Specifies the external ID of the company.';
+                }
                 field(Note; Rec.GetNote())
                 {
                     ApplicationArea = All;
                     Caption = 'Note';
                     ToolTip = 'Specifies a note about the customer in Shopify.';
+                }
+                field(TaxId; TaxRegistrationId)
+                {
+                    ApplicationArea = All;
+                    Caption = 'Tax Id';
+                    ToolTip = 'Specifies the company''s tax ID.';
+                    Editable = false;
                 }
             }
 
@@ -55,20 +67,52 @@ page 30157 "Shpfy Company Card"
                 field(CustomerNo; CustomerNo)
                 {
                     ApplicationArea = All;
+                    AssistEdit = true;
                     Caption = 'Customer No.';
                     TableRelation = Customer;
                     ToolTip = 'Specifies the mapped customer number.';
-                    Editable = false;
+
+                    trigger OnValidate()
+                    begin
+                        if CustomerNo <> '' then begin
+                            Customer.Get(CustomerNo);
+                            Rec."Customer SystemId" := Customer.SystemId;
+                            GetMappedCustomer();
+                        end;
+                    end;
+
+                    trigger OnAssistEdit()
+                    var
+                        CustomerList: Page "Customer List";
+                    begin
+                        CustomerList.LookupMode := true;
+                        CustomerList.SetRecord(Customer);
+                        if CustomerList.RunModal() = Action::LookupOK then begin
+                            CustomerList.GetRecord(Customer);
+                            Rec."Customer SystemId" := Customer.SystemId;
+                            CustomerNo := Customer."No.";
+                            Rec.Modify();
+                        end;
+                    end;
                 }
                 field(CustomerName; Customer."Name")
                 {
                     ApplicationArea = All;
                     Caption = 'Customer Name';
                     ToolTip = 'Specifies the customer''s name.';
-                    Editable = false;
+                }
+                field(Address; Customer.Address)
+                {
+                    ApplicationArea = All;
+                    Caption = 'Customer Address';
+                    ToolTip = 'Specifies the customer''s address.';
                 }
             }
-
+            part(CompanyLocations; "Shpfy Comp. Locations Subform")
+            {
+                ApplicationArea = All;
+                SubPageLink = "Company SystemId" = field(SystemId);
+            }
         }
         area(FactBoxes)
         {
@@ -128,6 +172,36 @@ page 30157 "Shpfy Company Card"
                 RunPageLink = "Company SystemId" = field(SystemId);
                 ToolTip = 'View a list of Shopify catalogs for the company.';
             }
+            action(Metafields)
+            {
+                ApplicationArea = All;
+                Caption = 'Metafields';
+                Image = PriceAdjustment;
+                Promoted = true;
+                PromotedCategory = Category4;
+                PromotedIsBig = true;
+                PromotedOnly = true;
+                ToolTip = 'Add metafields to a company. This can be used for adding custom data fields to compoanies in Shopify.';
+
+                trigger OnAction()
+                var
+                    Metafields: Page "Shpfy Metafields";
+                begin
+                    Metafields.RunForResource(Database::"Shpfy Company", Rec.Id, Rec."Shop Code");
+                end;
+            }
+            action(ShopifyLocations)
+            {
+                ApplicationArea = All;
+                Caption = 'Shopify Locations';
+                Image = Warehouse;
+                Promoted = true;
+                PromotedOnly = true;
+                PromotedCategory = Category4;
+                RunObject = Page "Shpfy Comp. Locations";
+                RunPageLink = "Company SystemId" = field(SystemId);
+                ToolTip = 'View a list of Shopify company locations.';
+            }
         }
 
     }
@@ -135,15 +209,14 @@ page 30157 "Shpfy Company Card"
     var
         Customer: Record Customer;
         CustomerNo: Code[20];
+        TaxRegistrationId: Text[150];
 
     trigger OnAfterGetCurrRecord()
     begin
         GetMappedCustomer();
+        GetTaxRegisrationId();
     end;
 
-    /// <summary> 
-    /// Get Mapped Customer.
-    /// </summary>
     local procedure GetMappedCustomer()
     begin
         if IsNullGuid(Rec."Customer SystemId") then begin
@@ -156,5 +229,13 @@ page 30157 "Shpfy Company Card"
                 Clear(Customer);
                 Clear(CustomerNo);
             end;
+    end;
+
+    local procedure GetTaxRegisrationId()
+    var
+        CompanyLocation: Record "Shpfy Company Location";
+    begin
+        if CompanyLocation.Get(Rec."Location Id") then
+            TaxRegistrationId := CompanyLocation."Tax Registration Id";
     end;
 }

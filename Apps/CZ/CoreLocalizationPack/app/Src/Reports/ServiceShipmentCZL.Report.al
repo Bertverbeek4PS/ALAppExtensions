@@ -155,7 +155,7 @@ report 31199 "Service Shipment CZL"
             column(DocumentDate_ServiceShipmentHeaderCaption; FieldCaption("Document Date"))
             {
             }
-            column(DocumentDate_ServiceShipmentHeader; "Document Date")
+            column(DocumentDate_ServiceShipmentHeader; Format("Document Date"))
             {
             }
             column(OrderNoLbl; OrderNoLbl)
@@ -340,7 +340,7 @@ report 31199 "Service Shipment CZL"
                         column(SerNo_TrackingSpecBuffer; TempTrackingSpecification."Serial No.")
                         {
                         }
-                        column(Expiration_TrackingSpecBuffer; TempTrackingSpecification."Expiration Date")
+                        column(Expiration_TrackingSpecBuffer; Format(TempTrackingSpecification."Expiration Date"))
                         {
                         }
                         column(Quantity_TrackingSpecBuffer; TempTrackingSpecification."Quantity (Base)")
@@ -408,8 +408,8 @@ report 31199 "Service Shipment CZL"
                 CurrReport.Language := LanguageMgt.GetLanguageIdOrDefault("Language Code");
                 CurrReport.FormatRegion := LanguageMgt.GetFormatRegionOrDefault("Format Region");
 
-                FormatAddress.ServiceShptShipTo(ShipToAddr, "Service Shipment Header");
-                FormatAddress.ServiceShptBillTo(CustAddr, ShipToAddr, "Service Shipment Header");
+                ServiceFormatAddress.ServiceShptShipTo(ShipToAddr, "Service Shipment Header");
+                ServiceFormatAddress.ServiceShptBillTo(CustAddr, ShipToAddr, "Service Shipment Header");
                 DocFooterText := FormatDocumentMgtCZL.GetDocumentFooterText("Language Code");
 
                 ItemTrackingDocManagement.SetRetrieveAsmItemTracking(true);
@@ -452,19 +452,11 @@ report 31199 "Service Shipment CZL"
     }
 
     var
-        TempTrackingSpecification: Record "Tracking Specification" temporary;
         LanguageMgt: Codeunit Language;
         FormatAddress: Codeunit "Format Address";
         FormatDocumentMgtCZL: Codeunit "Format Document Mgt. CZL";
         ItemTrackingDocManagement: Codeunit "Item Tracking Doc. Management";
-        CompanyAddr: array[8] of Text[100];
-        CustAddr: array[8] of Text[100];
-        ShipToAddr: array[8] of Text[100];
-        DocFooterText: Text[1000];
-        NoOfCopies: Integer;
-        NoOfLoops: Integer;
-        ShowLotSN: Boolean;
-        TrackingSpecCount: Integer;
+        ServiceFormatAddress: Codeunit "Service Format Address";
         DocumentLbl: Label 'Shipment';
         PageLbl: Label 'Page';
         CopyLbl: Label 'Copy';
@@ -481,6 +473,17 @@ report 31199 "Service Shipment CZL"
         TotalLbl: Label 'total';
         VATLbl: Label 'VAT';
         OrderNoLbl: Label 'Order No.';
+
+    protected var
+        TempTrackingSpecification: Record "Tracking Specification" temporary;
+        CompanyAddr: array[8] of Text[100];
+        CustAddr: array[8] of Text[100];
+        ShipToAddr: array[8] of Text[100];
+        DocFooterText: Text[1000];
+        NoOfCopies: Integer;
+        NoOfLoops: Integer;
+        ShowLotSN: Boolean;
+        TrackingSpecCount: Integer;
 
     local procedure IsReportInPreviewMode(): Boolean
     var

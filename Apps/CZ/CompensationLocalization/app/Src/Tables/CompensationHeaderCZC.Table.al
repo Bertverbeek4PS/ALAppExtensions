@@ -1,4 +1,4 @@
-﻿// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License. See License.txt in the project root for license information.
 // ------------------------------------------------------------------------------------------------
@@ -31,16 +31,17 @@ table 31272 "Compensation Header CZC"
         field(5; "No."; Code[20])
         {
             Caption = 'No.';
+            OptimizeForTextSearch = true;
             DataClassification = CustomerContent;
 
             trigger OnValidate()
             var
                 CompensationsSetupCZC: Record "Compensations Setup CZC";
-                NoSeriesMgt: Codeunit NoSeriesManagement;
+                NoSeries: Codeunit "No. Series";
             begin
                 if "No." <> xRec."No." then begin
                     CompensationsSetupCZC.Get();
-                    NoSeriesMgt.TestManual(CompensationsSetupCZC."Compensation Nos.");
+                    NoSeries.TestManual(CompensationsSetupCZC."Compensation Nos.");
                     "No. Series" := '';
                 end;
             end;
@@ -48,6 +49,7 @@ table 31272 "Compensation Header CZC"
         field(10; Description; Text[100])
         {
             Caption = 'Description';
+            OptimizeForTextSearch = true;
             DataClassification = CustomerContent;
         }
         field(13; "Company Type"; Enum "Compensation Company Type CZC")
@@ -330,12 +332,20 @@ table 31272 "Compensation Header CZC"
     trigger OnInsert()
     var
         CompensationsSetupCZC: Record "Compensations Setup CZC";
-        NoSeriesManagement: Codeunit NoSeriesManagement;
+        CompensationHeader: Record "Compensation Header CZC";
+        NoSeries: Codeunit "No. Series";
     begin
         CompensationsSetupCZC.Get();
         if "No." = '' then begin
             CompensationsSetupCZC.TestField("Compensation Nos.");
-            NoSeriesManagement.InitSeries(CompensationsSetupCZC."Compensation Nos.", xRec."No. Series", 0D, "No.", "No. Series");
+                "No. Series" := CompensationsSetupCZC."Compensation Nos.";
+                if NoSeries.AreRelated("No. Series", xRec."No. Series") then
+                    "No. Series" := xRec."No. Series";
+                "No." := NoSeries.GetNextNo("No. Series");
+                CompensationHeader.ReadIsolation(ReadIsolation::ReadUncommitted);
+                CompensationHeader.SetLoadFields("No.");
+                while CompensationHeader.Get("No.") do
+                    "No." := NoSeries.GetNextNo("No. Series");
         end;
         "User ID" := CopyStr(UserId(), 1, MaxStrLen("User ID"));
     end;
@@ -359,15 +369,13 @@ table 31272 "Compensation Header CZC"
     var
         CompensationHeaderCZC: Record "Compensation Header CZC";
         CompensationsSetupCZC: Record "Compensations Setup CZC";
-        NoSeriesManagement: Codeunit NoSeriesManagement;
+        NoSeries: Codeunit "No. Series";
     begin
         CompensationHeaderCZC.Copy(Rec);
         CompensationsSetupCZC.Get();
         CompensationsSetupCZC.TestField("Compensation Nos.");
-        if NoSeriesManagement.SelectSeries(CompensationsSetupCZC."Compensation Nos.", OldCompensationHeaderCZC."No. Series", CompensationHeaderCZC."No. Series") then begin
-            CompensationsSetupCZC.Get();
-            CompensationsSetupCZC.TestField("Compensation Nos.");
-            NoSeriesManagement.SetSeries(CompensationHeaderCZC."No.");
+        if NoSeries.LookupRelatedNoSeries(CompensationsSetupCZC."Compensation Nos.", OldCompensationHeaderCZC."No. Series", CompensationHeaderCZC."No. Series") then begin
+            CompensationHeaderCZC."No." := NoSeries.GetNextNo(CompensationHeaderCZC."No. Series");
             Rec := CompensationHeaderCZC;
             exit(true);
         end;

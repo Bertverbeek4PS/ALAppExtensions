@@ -82,13 +82,7 @@ codeunit 148060 "VAT Statements CZL"
         VATStatementPreviewCZL.VATStatementLineSubForm.ColumnValue.Drilldown();
 
         // [THEN] Page "VAT Entries" will be opened with filter to VAT Date
-#if not CLEAN22
-#pragma warning disable AL0432
-        Assert.AreEqual(VATEntries.Filter.GetFilter("VAT Date CZL"), StrSubstNo('%1..%2', StartingDate, EndingDate), '');
-#pragma warning restore AL0432
-#else
         Assert.AreEqual(VATEntries.Filter.GetFilter("VAT Reporting Date"), StrSubstNo('%1..%2', StartingDate, EndingDate), '');
-#endif
         VATEntries.Close();
         VATStatement.Close();
         VATStatementPreviewCZL.Close();
@@ -120,8 +114,8 @@ codeunit 148060 "VAT Statements CZL"
         Initialize();
 
         // [GIVEN] VAT Statement has been select
-        FindVATStatementTemplate(VATStatementTemplate, XMLFormat::DPHDP3);
-        LibraryTaxCZL.SelectVATStatementName(VATStatementName, VATStatementTemplate.Name);
+        LibraryTaxCZL.FindVATStatementTemplate(VATStatementTemplate);
+        FindVATStatementName(VATStatementName, VATStatementTemplate.Name, XMLFormat::DPHDP3);
 
         // [GIVEN] Starting Date and Ending Date have been calculated as first open VAT Period
         StartingDate := LibraryTaxCZL.GetVATPeriodStartingDate();
@@ -168,8 +162,8 @@ codeunit 148060 "VAT Statements CZL"
         Initialize();
 
         // [GIVEN] VAT Statement has been select
-        FindVATStatementTemplate(VATStatementTemplate, XMLFormat::DPHDP3);
-        LibraryTaxCZL.SelectVATStatementName(VATStatementName, VATStatementTemplate.Name);
+        LibraryTaxCZL.FindVATStatementTemplate(VATStatementTemplate);
+        FindVATStatementName(VATStatementName, VATStatementTemplate.Name, XMLFormat::DPHDP3);
 
         // [GIVEN] Starting Date and Ending Date have been calculated as first open VAT Period
         StartingDate := LibraryTaxCZL.GetVATPeriodStartingDate();
@@ -208,10 +202,8 @@ codeunit 148060 "VAT Statements CZL"
     [Test]
     [HandlerFunctions('CalcAndPostVATSettlCZLRequestPageHandler,VATStatementCZLRequestPageHandler,ConfirmYesHandler')]
     procedure VATStatementDPHDP3PrintAdditional()
-    var
-        VATStatementTemplate: Record "VAT Statement Template";
     begin
-        AdditionalVATStatement(VATStatementTemplate."XML Format CZL"::DPHDP3, '2DAN');
+        AdditionalVATStatement("VAT Statement XML Format CZL"::DPHDP3, '2DAN');
     end;
 
     procedure AdditionalVATStatement(XMLFormat: Enum "VAT Statement XML Format CZL"; SalesTaxRowNo: Code[10])
@@ -230,8 +222,8 @@ codeunit 148060 "VAT Statements CZL"
         Initialize();
 
         // [GIVEN] VAT Statement has been select
-        FindVATStatementTemplate(VATStatementTemplate, XMLFormat::DPHDP3);
-        LibraryTaxCZL.SelectVATStatementName(VATStatementName, VATStatementTemplate.Name);
+        LibraryTaxCZL.FindVATStatementTemplate(VATStatementTemplate);
+        FindVATStatementName(VATStatementName, VATStatementTemplate.Name, XMLFormat);
 
         // [GIVEN] Starting Date and Ending Date have been calculated as first open VAT Period
         StartingDate := LibraryTaxCZL.GetVATPeriodStartingDate();
@@ -274,7 +266,7 @@ codeunit 148060 "VAT Statements CZL"
     end;
 
     [RequestPageHandler]
-    procedure VATStatementCZLRequestPageHandler(var VATStatementCZL: TestRequestPage "VAT Statement CZL")
+    procedure VATStatementCZLRequestPageHandler(var VATStatement: TestRequestPage "VAT Statement")
     var
         StartingDate: Date;
         EndingDate: Date;
@@ -288,13 +280,13 @@ codeunit 148060 "VAT Statements CZL"
         PeriodSelection := LibraryVariableStorage.DequeueInteger();
         DocumentNo := CopyStr(LibraryVariableStorage.DequeueText(), 1, 20);
 
-        VATStatementCZL.StartingDate.SetValue(StartingDate);
-        VATStatementCZL.EndingDate.SetValue(EndingDate);
-        VATStatementCZL.Selection.SetValue(Selection);
-        VATStatementCZL.PeriodSelection.SetValue(PeriodSelection);
-        VATStatementCZL.SettlementNoFilterField.SetValue(DocumentNo);
+        VATStatement.StartingDate.SetValue(StartingDate);
+        VATStatement.EndingDate.SetValue(EndingDate);
+        VATStatement.Selection.SetValue(Selection);
+        VATStatement.PeriodSelection.SetValue(PeriodSelection);
+        VATStatement.SettlementNoFilterCZL.SetValue(DocumentNo);
 
-        VATStatementCZL.SaveAsXml(
+        VATStatement.SaveAsXml(
           LibraryReportDataset.GetParametersFileName(), LibraryReportDataset.GetFileName());
     end;
 
@@ -457,20 +449,15 @@ codeunit 148060 "VAT Statements CZL"
             Report.SaveAs(ReportID, RequestPageParametersXML, ReportFormat, ReportOutStream);
     end;
 
-    local procedure FindVATStatementTemplate(var VATStatementTemplate: Record "VAT Statement Template"; XMLFormat: Enum "VAT Statement XML Format CZL")
+    local procedure FindVATStatementName(var VATStatementName: Record "VAT Statement Name"; VATStatementTemplateName: Code[10]; XMLFormat: Enum "VAT Statement XML Format CZL")
     begin
-        LibraryTaxCZL.FindVATStatementTemplate(VATStatementTemplate);
-        SetXMLFormat(VATStatementTemplate, XMLFormat);
+        LibraryTaxCZL.SelectVATStatementName(VATStatementName, VATStatementTemplateName);
+        LibraryTaxCZL.SetXMLFormat(VATStatementName, XMLFormat);
     end;
 
     local procedure GetSettlementNo(StartingDate: Date): Code[20]
     begin
         exit(StrSubstNo('VYRDPH%1%2', Date2DMY(StartingDate, 2), Date2DMY(StartingDate, 3)));
-    end;
-
-    local procedure SetXMLFormat(var VATStatementTemplate: Record "VAT Statement Template"; XMLFormat: Enum "VAT Statement XML Format CZL")
-    begin
-        LibraryTaxCZL.SetXMLFormat(VATStatementTemplate, XMLFormat);
     end;
 
     local procedure SelectGenJournalBatch(var GenJournalBatch: Record "Gen. Journal Batch")

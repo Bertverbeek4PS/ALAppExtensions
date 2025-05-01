@@ -5,8 +5,14 @@
 namespace Microsoft.eServices.EDocument;
 
 using Microsoft.Bank.Reconciliation;
+#if not CLEAN26
+using Microsoft.eServices.EDocument.Processing.Import;
+#endif
+using Microsoft.Finance.Currency;
 using Microsoft.Finance.GeneralLedger.Journal;
+using Microsoft.Finance.GeneralLedger.Setup;
 using Microsoft.Finance.VAT.Calculation;
+using System.Reflection;
 using Microsoft.Foundation.Company;
 using Microsoft.Foundation.UOM;
 using Microsoft.Inventory.Item;
@@ -246,8 +252,7 @@ codeunit 6109 "E-Document Import Helper"
         LineAmount := LineAmountFieldRef.Value();
 
         LineDiscountAmount := (LineQuantity * LineDirectUnitCost) - LineAmount;
-
-        LineDiscountAmountFieldRef.Value(Format(LineDiscountAmount, 0, 9));
+        LineDiscountAmountFieldRef.Value(LineDiscountAmount);
     end;
 
     /// <summary>
@@ -558,6 +563,62 @@ codeunit 6109 "E-Document Import Helper"
             exit(VendorNo);
     end;
 
+    /// <summary>
+    /// Use it to get a vendor by number, or rise an error if vendor does not exist
+    /// </summary>
+    /// <param name="VendorNo">Vendor's number</param>
+    /// <returns>Vendor record if exists or error.</returns>
+    procedure GetVendor(var EDocument: Record "E-Document"; VendorNo: Code[20]) Vendor: Record Vendor
+    begin
+        if not Vendor.Get(VendorNo) then
+            EDocErrorHelper.LogSimpleErrorMessage(EDocument, StrSubstNo(VendorNotFoundErr, EDocument."Bill-to/Pay-to Name"));
+    end;
+
+#if not CLEAN26
+    /// <summary>
+    /// Use it to process imported E-Document
+    /// </summary>
+    /// <param name="EDocument">The E-Document record.</param>
+    /// <param name="CreateJnlLine">If processing should create journal line</param>
+    [Obsolete('Use codeunit 6140 "E-Doc. Import"''s method ProcessIncomingEDocument', '26.0')]
+    procedure ProcessDocument(var EDocument: Record "E-Document"; CreateJnlLine: Boolean)
+    var
+        EDocImportParameters: Record "E-Doc. Import Parameters";
+    begin
+        EDocImportParameters."Step to Run" := "Import E-Document Steps"::"Finish draft";
+        EDocumentImport.ProcessIncomingEDocument(EDocument, EDocImportParameters);
+    end;
+#endif
+
+    /// <summary>
+    /// Use it to set hide dialogs when importing E-Document.
+    /// </summary>
+    /// <param name="Hide">Hide or show the dialog.</param>
+    procedure SetHideDialogs(Hide: Boolean)
+    begin
+        EDocumentImport.SetHideDialogs(Hide);
+    end;
+
+    /// <summary>
+    /// Use it to find attachment file extension when importing E-Document.
+    /// </summary>
+    procedure DetermineFileType(MimeType: Text): Text
+    begin
+        case MimeType of
+            'image/jpeg':
+                exit('jpeg');
+            'image/png':
+                exit('png');
+            'application/pdf':
+                exit('pdf');
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/vnd.oasis.opendocument.spreadsheet':
+                exit('xlsx');
+            else
+                exit('');
+        end;
+    end;
+
     local procedure TryFindLeastBlockedVendorNoByVendorBankAcc(var VendorBankAccount: record "Vendor Bank Account"): Code[20]
     var
         Vendor: Record Vendor;
@@ -591,6 +652,14 @@ codeunit 6109 "E-Document Import Helper"
         exit('');
     end;
 
+    internal procedure ProcessField(EDocument: Record "E-Document"; RecRef: RecordRef; Field: Record Field; DocumentFieldRef: FieldRef)
+    begin
+        if Field.Type = Field.Type::Decimal then
+            ProcessDecimalField(EDocument, RecRef, Field."No.", DocumentFieldRef.Value())
+        else
+            ProcessField(EDocument, RecRef, Field."No.", DocumentFieldRef.Value());
+    end;
+
     internal procedure ProcessFieldNoValidate(RecRef: RecordRef; FieldNo: Integer; Value: Text[250])
     var
         FieldRef: FieldRef;
@@ -605,6 +674,29 @@ codeunit 6109 "E-Document Import Helper"
     begin
         FieldRef := RecRef.Field(FieldNo);
         SetFieldValue(EDocument, FieldRef, Value);
+    end;
+
+    internal procedure ProcessDecimalField(EDocument: Record "E-Document"; RecRef: RecordRef; FieldNo: Integer; Value: Decimal)
+    var
+        FieldRef: FieldRef;
+    begin
+        FieldRef := RecRef.Field(FieldNo);
+        SetDecimalFieldValue(EDocument, FieldRef, Value);
+    end;
+
+    internal procedure GetCurrencyRoundingPrecision(CurrencyCode: Code[10]): Decimal
+    var
+        GeneralLedgerSetup: Record "General Ledger Setup";
+        Currency: Record Currency;
+        AmountRoundingPrecision: Decimal;
+    begin
+        GeneralLedgerSetup.Get();
+        AmountRoundingPrecision := GeneralLedgerSetup."Amount Rounding Precision";
+        if CurrencyCode <> '' then
+            if Currency.Get(CurrencyCode) then
+                AmountRoundingPrecision := Currency."Amount Rounding Precision";
+
+        exit(AmountRoundingPrecision);
     end;
 
     local procedure FindAppropriateGLAccount(var EDocument: Record "E-Document"; var SourceRecRef: RecordRef; LineDescription: Text[250]; LineDirectUnitCost: Decimal): Code[20]
@@ -725,6 +817,7 @@ codeunit 6109 "E-Document Import Helper"
         exit(true);
     end;
 
+
     local procedure ResolveUnitOfMeasureFromItem(var Item: Record Item; var EDocument: Record "E-Document"; var TempDocumentLine: RecordRef): Boolean
     var
         PurchaseLine: Record "Purchase Line";
@@ -807,6 +900,17 @@ codeunit 6109 "E-Document Import Helper"
         exit(VatRegNo);
     end;
 
+    local procedure SetDecimalFieldValue(EDocument: Record "E-Document"; var FieldRef: FieldRef; Value: Decimal)
+    var
+        ConfigValidateManagement: Codeunit "Config. Validate Management";
+        ErrorText: Text;
+    begin
+        // ConfigValidateManagement works with XML formats, but we need to adapt it to the regional settings
+        ErrorText := ConfigValidateManagement.EvaluateValueWithValidate(FieldRef, Format(Value, 0, 9), false);
+        if ErrorText <> '' then
+            EDocErrorHelper.LogSimpleErrorMessage(EDocument, ErrorText);
+    end;
+
     local procedure SetFieldValue(EDocument: Record "E-Document"; var FieldRef: FieldRef; Value: Text[250])
     var
         ConfigValidateManagement: Codeunit "Config. Validate Management";
@@ -841,6 +945,7 @@ codeunit 6109 "E-Document Import Helper"
 
     var
         EDocErrorHelper: Codeunit "E-Document Error Helper";
+        EDocumentImport: Codeunit "E-Doc. Import";
         UOMNotFoundErr: Label 'Cannot find unit of measure %1. Make sure that the unit of measure exists.', Comment = '%1 International Standard Code or Code or Description for Unit of Measure';
         UOMConflictWithItemRefErr: Label 'Unit of measure %1 on electronic document line %2 does not match unit of measure %3 in the item reference.  Make sure that a card for the item with the specified unit of measure exists with the corresponding item reference.', Comment = '%1 imported unit code, %2 document line number (e.g. 2), %3 Item Reference unit code';
         UOMConflictItemRefWithItemErr: Label 'Unit of measure %1 in the item reference is not in the list of units of measure for the corresponding item. Make sure that a unit of measure of item reference is in the list of units of measure for the corresponding item.', Comment = '%1 item reference unit code';
@@ -856,6 +961,7 @@ codeunit 6109 "E-Document Import Helper"
         InvalidCompanyInfoAddressErr: Label 'The customer''s address ''%1'' on the electronic document does not match the Address in the Company Information window.', Comment = '%1 = customer address, street name';
         UnableToApplyDiscountErr: Label 'The invoice discount of %1 cannot be applied. Invoice discount must be allowed on at least one invoice line and invoice total must not be 0.', Comment = '%1 - a decimal number';
         TotalsMismatchErr: Label 'The total amount %1 on the created document is different than the total amount %2 in the electronic document.', Comment = '%1 total amount, %2 expected total amount';
+        VendorNotFoundErr: Label 'Cannot find vendor ''%1'' based on the vendor''s name, address or VAT registration number on the electronic document. Make sure that a card for the vendor exists with the corresponding name, address or VAT Registration No.', Comment = '%1 Vendor name (e.g. London Postmaster)';
         NotSpecifiedUnitOfMeasureTxt: Label '<NONE>';
         VATRegistrationNoFilterTxt: Label '*%1', Comment = '%1 - Filter value', Locked = true;
 }

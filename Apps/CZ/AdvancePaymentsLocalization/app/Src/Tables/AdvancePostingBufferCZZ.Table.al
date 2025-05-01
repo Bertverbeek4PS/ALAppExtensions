@@ -4,9 +4,9 @@
 // ------------------------------------------------------------------------------------------------
 namespace Microsoft.Finance.AdvancePayments;
 
+using Microsoft.Finance.Currency;
 using Microsoft.Finance.VAT.Setup;
 using Microsoft.Foundation.Enums;
-using Microsoft.Finance.Currency;
 
 table 31013 "Advance Posting Buffer CZZ"
 {
@@ -60,6 +60,36 @@ table 31013 "Advance Posting Buffer CZZ"
             Caption = 'VAT %';
             DecimalPlaces = 1 : 1;
         }
+        field(35; "Auxiliary Entry"; Boolean)
+        {
+            Caption = 'Auxiliary Entry';
+        }
+        field(40; "Non-Deductible VAT %"; Decimal)
+        {
+            Caption = 'Non-Deductible VAT %"';
+            DecimalPlaces = 0 : 5;
+            Editable = false;
+        }
+        field(41; "Non-Deductible VAT Base"; Decimal)
+        {
+            AutoFormatType = 1;
+            Caption = 'Non-Deductible VAT Base';
+        }
+        field(42; "Non-Deductible VAT Amount"; Decimal)
+        {
+            AutoFormatType = 1;
+            Caption = 'Non-Deductible VAT Amount';
+        }
+        field(43; "Non-Deductible VAT Base ACY"; Decimal)
+        {
+            AutoFormatType = 1;
+            Caption = 'Non-Deductible VAT Base ACY';
+        }
+        field(44; "Non-Deductible VAT Amount ACY"; Decimal)
+        {
+            AutoFormatType = 1;
+            Caption = 'Non-Deductible VAT Amount ACY';
+        }
     }
 
     keys
@@ -69,6 +99,94 @@ table 31013 "Advance Posting Buffer CZZ"
             Clustered = true;
         }
     }
+
+    procedure PrepareForPurchAdvLetterEntry(var PurchAdvLetterEntry: Record "Purch. Adv. Letter Entry CZZ")
+    begin
+        Clear(Rec);
+        "VAT Bus. Posting Group" := PurchAdvLetterEntry."VAT Bus. Posting Group";
+        "VAT Prod. Posting Group" := PurchAdvLetterEntry."VAT Prod. Posting Group";
+        "VAT Calculation Type" := PurchAdvLetterEntry."VAT Calculation Type";
+        "VAT %" := PurchAdvLetterEntry."VAT %";
+        Amount := PurchAdvLetterEntry.Amount;
+        "VAT Base Amount" := PurchAdvLetterEntry."VAT Base Amount";
+        "VAT Amount" := PurchAdvLetterEntry."VAT Amount";
+        "Amount (ACY)" := PurchAdvLetterEntry."Amount (LCY)";
+        "VAT Base Amount (ACY)" := PurchAdvLetterEntry."VAT Base Amount (LCY)";
+        "VAT Amount (ACY)" := PurchAdvLetterEntry."VAT Amount (LCY)";
+        "Auxiliary Entry" := PurchAdvLetterEntry."Auxiliary Entry";
+        "Non-Deductible VAT %" := PurchAdvLetterEntry."Non-Deductible VAT %";
+        OnAfterPrepareForPurchAdvLetterEntry(PurchAdvLetterEntry, Rec);
+    end;
+
+    procedure PrepareForPurchAdvLetterLine(var PurchAdvLetterLine: Record "Purch. Adv. Letter Line CZZ")
+    begin
+        Clear(Rec);
+        "VAT Bus. Posting Group" := PurchAdvLetterLine."VAT Bus. Posting Group";
+        "VAT Prod. Posting Group" := PurchAdvLetterLine."VAT Prod. Posting Group";
+        "VAT Calculation Type" := PurchAdvLetterLine."VAT Calculation Type";
+        "VAT %" := PurchAdvLetterLine."VAT %";
+        Amount := PurchAdvLetterLine."Amount Including VAT";
+        "VAT Base Amount" := PurchAdvLetterLine.Amount;
+        "VAT Amount" := PurchAdvLetterLine."VAT Amount";
+        "Amount (ACY)" := PurchAdvLetterLine."Amount Including VAT (LCY)";
+        "VAT Base Amount (ACY)" := PurchAdvLetterLine."Amount (LCY)";
+        "VAT Amount (ACY)" := PurchAdvLetterLine."VAT Amount (LCY)";
+        OnAfterPrepareForPurchAdvLetterLine(PurchAdvLetterLine, Rec);
+    end;
+
+    procedure PrepareForSalesAdvLetterEntry(var SalesAdvLetterEntry: Record "Sales Adv. Letter Entry CZZ")
+    begin
+        Clear(Rec);
+        "VAT Bus. Posting Group" := SalesAdvLetterEntry."VAT Bus. Posting Group";
+        "VAT Prod. Posting Group" := SalesAdvLetterEntry."VAT Prod. Posting Group";
+        "VAT Calculation Type" := SalesAdvLetterEntry."VAT Calculation Type";
+        "VAT %" := SalesAdvLetterEntry."VAT %";
+        Amount := SalesAdvLetterEntry.Amount;
+        "VAT Base Amount" := SalesAdvLetterEntry."VAT Base Amount";
+        "VAT Amount" := SalesAdvLetterEntry."VAT Amount";
+        "Amount (ACY)" := SalesAdvLetterEntry."Amount (LCY)";
+        "VAT Base Amount (ACY)" := SalesAdvLetterEntry."VAT Base Amount (LCY)";
+        "VAT Amount (ACY)" := SalesAdvLetterEntry."VAT Amount (LCY)";
+        "Auxiliary Entry" := SalesAdvLetterEntry."Auxiliary Entry";
+        OnAfterPrepareForSalesAdvLetterEntry(SalesAdvLetterEntry, Rec);
+    end;
+
+    procedure PrepareForSalesAdvLetterLine(var SalesAdvLetterLine: Record "Sales Adv. Letter Line CZZ")
+    begin
+        Clear(Rec);
+        "VAT Bus. Posting Group" := SalesAdvLetterLine."VAT Bus. Posting Group";
+        "VAT Prod. Posting Group" := SalesAdvLetterLine."VAT Prod. Posting Group";
+        "VAT Calculation Type" := SalesAdvLetterLine."VAT Calculation Type";
+        "VAT %" := SalesAdvLetterLine."VAT %";
+        Amount := SalesAdvLetterLine."Amount Including VAT";
+        "VAT Base Amount" := SalesAdvLetterLine.Amount;
+        "VAT Amount" := SalesAdvLetterLine."VAT Amount";
+        "Amount (ACY)" := SalesAdvLetterLine."Amount Including VAT (LCY)";
+        "VAT Base Amount (ACY)" := SalesAdvLetterLine."Amount (LCY)";
+        "VAT Amount (ACY)" := SalesAdvLetterLine."VAT Amount (LCY)";
+        OnAfterPrepareForSalesAdvLetterLine(SalesAdvLetterLine, Rec);
+    end;
+
+    procedure Update(AdvancePostingBuffer: Record "Advance Posting Buffer CZZ")
+    begin
+        OnBeforeUpdate(Rec, AdvancePostingBuffer);
+
+        Rec := AdvancePostingBuffer;
+        if Find() then begin
+            Amount += AdvancePostingBuffer.Amount;
+            "VAT Base Amount" += AdvancePostingBuffer."VAT Base Amount";
+            "VAT Amount" += AdvancePostingBuffer."VAT Amount";
+            "Amount (ACY)" += AdvancePostingBuffer."Amount (ACY)";
+            "VAT Base Amount (ACY)" += AdvancePostingBuffer."VAT Base Amount (ACY)";
+            "VAT Amount (ACY)" += AdvancePostingBuffer."VAT Amount (ACY)";
+            OnUpdateOnBeforeModify(Rec, AdvancePostingBuffer);
+            Modify();
+            OnUpdateOnAfterModify(Rec, AdvancePostingBuffer);
+        end else
+            Insert();
+
+        OnAfterUpdate(Rec, AdvancePostingBuffer);
+    end;
 
     procedure UpdateLCYAmounts(CurrencyCode: Code[10]; CurrencyFactor: Decimal)
     var
@@ -91,5 +209,87 @@ table 31013 "Advance Posting Buffer CZZ"
                   Rec."VAT Amount", CurrencyFactor));
             Rec."VAT Base Amount (ACY)" := Rec."Amount (ACY)" - Rec."VAT Amount (ACY)";
         end;
+    end;
+
+    procedure UpdateVATAmounts()
+    begin
+        Amount := Round(Amount);
+        case "VAT Calculation Type" of
+            "VAT Calculation Type"::"Normal VAT":
+                "VAT Amount" := Round(Amount * "VAT %" / (100 + "VAT %"));
+            "VAT Calculation Type"::"Reverse Charge VAT":
+                "VAT Amount" := 0;
+        end;
+        "VAT Base Amount" := Amount - "VAT Amount";
+    end;
+
+    procedure ReverseAmounts()
+    begin
+        Amount := -Amount;
+        "VAT Base Amount" := -"VAT Base Amount";
+        "VAT Amount" := -"VAT Amount";
+        "Amount (ACY)" := -"Amount (ACY)";
+        "VAT Base Amount (ACY)" := -"VAT Base Amount (ACY)";
+        "VAT Amount (ACY)" := -"VAT Amount (ACY)";
+    end;
+
+    internal procedure IsNonDeductibleVATAllowed(): Boolean
+    var
+        VATPostingSetup: Record "VAT Posting Setup";
+    begin
+        exit(VATPostingSetup.IsNonDeductibleVATAllowed(
+            "VAT Bus. Posting Group", "VAT Prod. Posting Group"));
+    end;
+
+    internal procedure IsNonDeductibleVATAllowedInBuffer(): Boolean
+    var
+        AdvancePostingBufferCZZ: Record "Advance Posting Buffer CZZ";
+    begin
+        AdvancePostingBufferCZZ.Copy(Rec, true);
+        if AdvancePostingBufferCZZ.FindSet() then
+            repeat
+                if AdvancePostingBufferCZZ.IsNonDeductibleVATAllowed() then
+                    exit(true);
+            until AdvancePostingBufferCZZ.Next() = 0;
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnAfterPrepareForPurchAdvLetterEntry(var PurchAdvLetterEntry: Record "Purch. Adv. Letter Entry CZZ"; var AdvancePostingBuffer: Record "Advance Posting Buffer CZZ" temporary)
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnAfterPrepareForPurchAdvLetterLine(var PurchAdvLetterLine: Record "Purch. Adv. Letter Line CZZ"; var AdvancePostingBuffer: Record "Advance Posting Buffer CZZ" temporary)
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnAfterPrepareForSalesAdvLetterEntry(var SalesAdvLetterEntry: Record "Sales Adv. Letter Entry CZZ"; var AdvancePostingBuffer: Record "Advance Posting Buffer CZZ" temporary)
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnAfterPrepareForSalesAdvLetterLine(var SalesAdvLetterLine: Record "Sales Adv. Letter Line CZZ"; var AdvancePostingBuffer: Record "Advance Posting Buffer CZZ" temporary)
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnBeforeUpdate(var AdvancePostingBuffer: Record "Advance Posting Buffer CZZ" temporary; var FormAdvancePostingBuffer: Record "Advance Posting Buffer CZZ")
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnUpdateOnBeforeModify(var AdvancePostingBuffer: Record "Advance Posting Buffer CZZ" temporary; var FormAdvancePostingBuffer: Record "Advance Posting Buffer CZZ")
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnUpdateOnAfterModify(var AdvancePostingBuffer: Record "Advance Posting Buffer CZZ" temporary; var FormAdvancePostingBuffer: Record "Advance Posting Buffer CZZ")
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnAfterUpdate(var AdvancePostingBuffer: Record "Advance Posting Buffer CZZ" temporary; var FormAdvancePostingBuffer: Record "Advance Posting Buffer CZZ")
+    begin
     end;
 }

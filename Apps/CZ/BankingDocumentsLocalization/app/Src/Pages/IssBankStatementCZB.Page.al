@@ -5,6 +5,7 @@
 namespace Microsoft.Bank.Documents;
 
 using Microsoft.Foundation.Attachment;
+using Microsoft.Utilities;
 
 page 31258 "Iss. Bank Statement CZB"
 {
@@ -136,11 +137,22 @@ page 31258 "Iss. Bank Statement CZB"
         }
         area(FactBoxes)
         {
+#if not CLEAN25
             part("Attached Documents"; "Document Attachment Factbox")
             {
+                ObsoleteTag = '25.0';
+                ObsoleteState = Pending;
+                ObsoleteReason = 'The "Document Attachment FactBox" has been replaced by "Doc. Attachment List Factbox", which supports multiple files upload.';
                 ApplicationArea = All;
                 Caption = 'Attachments';
-                SubPageLink = "Table ID" = const(31254), "No." = field("No.");
+                SubPageLink = "Table ID" = const(Database::"Iss. Bank Statement Header CZB"), "No." = field("No.");
+            }
+#endif
+            part("Attached Documents List"; "Doc. Attachment List Factbox")
+            {
+                ApplicationArea = All;
+                Caption = 'Documents';
+                SubPageLink = "Table ID" = const(Database::"Iss. Bank Statement Header CZB"), "No." = field("No.");
             }
             systempart(Links; Links)
             {
@@ -213,8 +225,16 @@ page 31258 "Iss. Bank Statement CZB"
                 ToolTip = 'The batch job create payment reconciliation journal or payment journal.';
 
                 trigger OnAction()
+                var
+                    InstructionMgt: Codeunit "Instruction Mgt.";
+                    InstructionMgtCZB: Codeunit "Instruction Mgt. CZB";
+                    OpenCreatedJnlQst: Label 'The journal was successfully created.\\Do you want to open the created journal and check it now?';
                 begin
-                    CreatePaymentReconciliationJournalOrGeneralJournal();
+                    if CreatePaymentReconciliationJournalOrGeneralJournal() then
+                        if Rec.PaymentReconcialiationOrGeneralJournalExist() then
+                            if InstructionMgt.IsEnabled(InstructionMgtCZB.ShowCreatedJnlIssBankStmtConfirmationMessageCode()) then
+                                if InstructionMgt.ShowConfirm(OpenCreatedJnlQst, InstructionMgtCZB.ShowCreatedJnlIssBankStmtConfirmationMessageCode()) then
+                                    Rec.OpenReconciliationOrJournal();
                 end;
             }
             action("&Navigate")
@@ -319,12 +339,14 @@ page 31258 "Iss. Bank Statement CZB"
         IssBankStatementHeaderCZB.PrintRecords(true);
     end;
 
-    local procedure CreatePaymentReconciliationJournalOrGeneralJournal()
+    local procedure CreatePaymentReconciliationJournalOrGeneralJournal(): Boolean
     var
         IssBankStatementHeaderCZB: Record "Iss. Bank Statement Header CZB";
+        InstructionMgt: Codeunit "Instruction Mgt.";
+        InstructionMgtCZB: Codeunit "Instruction Mgt. CZB";
     begin
         IssBankStatementHeaderCZB := Rec;
         IssBankStatementHeaderCZB.SetRecFilter();
-        IssBankStatementHeaderCZB.CreateJournal(true);
+        exit(IssBankStatementHeaderCZB.IsCreatedJournal(true, InstructionMgt.IsEnabled(InstructionMgtCZB.ShowCreatedJnlIssBankStmtConfirmationMessageCode())));
     end;
 }

@@ -18,12 +18,14 @@ using Microsoft.Sales.Customer;
 using Microsoft.Sales.Receivables;
 using Microsoft.Sales.Reminder;
 using Microsoft.Service.Setup;
+using Microsoft.Sales.Setup;
 using System.Email;
 using System.Globalization;
 using System.Security.User;
 using System.Utilities;
 using Microsoft.CRM.Team;
 using Microsoft.Utilities;
+using System.Text;
 
 report 31197 "Service Invoice CZL"
 {
@@ -84,6 +86,8 @@ report 31197 "Service Invoice CZL"
             trigger OnAfterGetRecord()
             begin
                 FormatAddress.Company(CompanyAddr, "Company Information");
+                if not SalesReceivablesSetup.Get() then
+                    SalesReceivablesSetup.Init();
             end;
         }
         dataitem("Service Invoice Header"; "Service Invoice Header")
@@ -148,6 +152,9 @@ report 31197 "Service Invoice CZL"
             column(PaymentsLbl; PaymentsLbl)
             {
             }
+            column(QRPaymentLbl; QRPaymentLbl)
+            {
+            }
             column(DisplayAdditionalFeeNote; DisplayAdditionalFeeNote)
             {
             }
@@ -187,25 +194,25 @@ report 31197 "Service Invoice CZL"
             column(PostingDate_ServiceInvoiceHeaderCaption; FieldCaption("Posting Date"))
             {
             }
-            column(PostingDate_ServiceInvoiceHeader; "Posting Date")
+            column(PostingDate_ServiceInvoiceHeader; Format("Posting Date"))
             {
             }
             column(VATDate_ServiceInvoiceHeaderCaption; FieldCaption("VAT Reporting Date"))
             {
             }
-            column(VATDate_ServiceInvoiceHeader; "VAT Reporting Date")
+            column(VATDate_ServiceInvoiceHeader; Format("VAT Reporting Date"))
             {
             }
             column(DueDate_ServiceInvoiceHeaderCaption; FieldCaption("Due Date"))
             {
             }
-            column(DueDate_ServiceInvoiceHeader; "Due Date")
+            column(DueDate_ServiceInvoiceHeader; Format("Due Date"))
             {
             }
             column(DocumentDate_ServiceInvoiceHeaderCaption; FieldCaption("Document Date"))
             {
             }
-            column(DocumentDate_ServiceInvoiceHeader; "Document Date")
+            column(DocumentDate_ServiceInvoiceHeader; Format("Document Date"))
             {
             }
             column(PmntSymbol1; PaymentSymbolLabel[1])
@@ -287,6 +294,9 @@ report 31197 "Service Invoice CZL"
             {
             }
             column(ShipToAddr6; ShipToAddr[6])
+            {
+            }
+            column(QRPaymentCode; QRPaymentCode)
             {
             }
             dataitem(CopyLoop; "Integer")
@@ -501,7 +511,11 @@ report 31197 "Service Invoice CZL"
 
                 trigger OnPreDataItem()
                 begin
+#if not CLEAN27
                     NoOfLoops := Abs(NoOfCopies) + Customer."Invoice Copies" + 1;
+#else
+                    NoOfLoops := Abs(NoOfCopies) + 1;
+#endif
                     if NoOfLoops <= 0 then
                         NoOfLoops := 1;
 
@@ -535,12 +549,9 @@ report 31197 "Service Invoice CZL"
 
                 if "Currency Code" = '' then
                     "Currency Code" := "General Ledger Setup"."LCY Code";
-#if not CLEAN22
-#pragma warning disable AL0432
-                if not ReplaceVATDateMgtCZL.IsEnabled() then
-                    "VAT Reporting Date" := "VAT Date CZL";
-#pragma warning restore AL0432
-#endif
+                Clear(QRPaymentCode);
+                if SalesReceivablesSetup."Print QR Payment CZL" and PaymentMethod."Print QR Payment CZL" then
+                    GenerateQRPaymentCode();
             end;
         }
     }
@@ -573,36 +584,16 @@ report 31197 "Service Invoice CZL"
     }
 
     var
-        TempVATAmountLine: Record "VAT Amount Line" temporary;
-        TempLineFeeNoteonReportHist: Record "Line Fee Note on Report Hist." temporary;
         Customer: Record Customer;
-        PaymentTerms: Record "Payment Terms";
-        PaymentMethod: Record "Payment Method";
-        ReasonCode: Record "Reason Code";
         CurrencyExchangeRate: Record "Currency Exchange Rate";
         VATClause: Record "VAT Clause";
+        SalesReceivablesSetup: Record "Sales & Receivables Setup";
         LanguageMgt: Codeunit Language;
         FormatAddress: Codeunit "Format Address";
         FormatDocument: Codeunit "Format Document";
         FormatDocumentMgtCZL: Codeunit "Format Document Mgt. CZL";
-#if not CLEAN22
-#pragma warning disable AL0432
-        ReplaceVATDateMgtCZL: Codeunit "Replace VAT Date Mgt. CZL";
-#pragma warning restore AL0432
-#endif
-        ExchRateText: Text[50];
-        VATClauseText: Text;
-        CompanyAddr: array[8] of Text[100];
-        CustAddr: array[8] of Text[100];
-        ShipToAddr: array[8] of Text[100];
-        DocFooterText: Text[1000];
-        PaymentSymbol: array[2] of Text;
-        PaymentSymbolLabel: array[2] of Text;
+        ServiceFormatAddress: Codeunit "Service Format Address";
         DocumentLbl: Label 'Invoice';
-        CalculatedExchRate: Decimal;
-        NoOfCopies: Integer;
-        NoOfLoops: Integer;
-        DisplayAdditionalFeeNote: Boolean;
         OrderNoLbl: Label 'Order No.';
         ExchRateLbl: Label 'Exchange Rate %1 %2 / %3 %4', Comment = '%1 = Calculated Exchange Rate, %2 = LCY Code, %3 = Exchange Rate, %4 = Currency Code';
         PageLbl: Label 'Page';
@@ -624,6 +615,27 @@ report 31197 "Service Invoice CZL"
         TotalLbl: Label 'total';
         VATLbl: Label 'VAT';
         PaymentsLbl: Label 'Payments List';
+        QRPaymentLbl: Label 'QR Payment';
+
+    protected var
+        PaymentTerms: Record "Payment Terms";
+        PaymentMethod: Record "Payment Method";
+        ReasonCode: Record "Reason Code";
+        TempLineFeeNoteonReportHist: Record "Line Fee Note on Report Hist." temporary;
+        TempVATAmountLine: Record "VAT Amount Line" temporary;
+        CompanyAddr: array[8] of Text[100];
+        CustAddr: array[8] of Text[100];
+        ShipToAddr: array[8] of Text[100];
+        PaymentSymbol: array[2] of Text;
+        PaymentSymbolLabel: array[2] of Text;
+        DocFooterText: Text[1000];
+        ExchRateText: Text[50];
+        VATClauseText: Text;
+        CalculatedExchRate: Decimal;
+        NoOfCopies: Integer;
+        NoOfLoops: Integer;
+        DisplayAdditionalFeeNote: Boolean;
+        QRPaymentCode: Text;
 
     local procedure GetLineFeeNoteOnReportHist(ServiceInvoiceHeaderNo: Code[20])
     var
@@ -676,8 +688,8 @@ report 31197 "Service Invoice CZL"
 
     local procedure FormatAddressFields(ServiceInvoiceHeader: Record "Service Invoice Header")
     begin
-        FormatAddress.ServiceInvBillTo(CustAddr, ServiceInvoiceHeader);
-        FormatAddress.ServiceInvShipTo(ShipToAddr, CustAddr, ServiceInvoiceHeader);
+        ServiceFormatAddress.ServiceInvBillTo(CustAddr, ServiceInvoiceHeader);
+        ServiceFormatAddress.ServiceInvShipTo(ShipToAddr, CustAddr, ServiceInvoiceHeader);
     end;
 
     local procedure IsReportInPreviewMode(): Boolean
@@ -685,5 +697,17 @@ report 31197 "Service Invoice CZL"
         MailManagement: Codeunit "Mail Management";
     begin
         exit(CurrReport.Preview or MailManagement.IsHandlingGetEmailBody());
+    end;
+
+    local procedure GenerateQRPaymentCode()
+    var
+        BarcodeSymbology2D: Enum "Barcode Symbology 2D";
+        BarcodeFontProvider2D: Interface "Barcode Font Provider 2D";
+        BarcodeString: Text;
+    begin
+        BarcodeFontProvider2D := Enum::"Barcode Font Provider 2D"::IDAutomation2D;
+        BarcodeSymbology2D := Enum::"Barcode Symbology 2D"::"QR-Code";
+        BarcodeString := "Service Invoice Header".CreateServiceInvoicePaymentQRCodeStringCZL();
+        QRPaymentCode := BarcodeFontProvider2D.EncodeFont(BarcodeString, BarcodeSymbology2D);
     end;
 }

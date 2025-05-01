@@ -2,7 +2,7 @@
   "id": "63c9fbe6-d4f3-458c-8c25-644c90a0874a",
   "name": "Bank Account Reconciliation With AI",
   "publisher": "Microsoft",
-  "version": "24.0.0.0",
+  "version": "27.0.0.0",
   "brief": "Bank Account Reconciliation With AI",
   "description": "Bank Account Reconciliation With AI",
   "privacyStatement": "https://go.microsoft.com/fwlink/?LinkId=724009",
@@ -14,12 +14,12 @@
   "internalsVisibleTo": [
     {
       "id": "2932b2a8-7399-4f8c-b1c0-1acfc2014ffb",
-      "name": "Bank Account Reconciliation With AI - Tests",
+      "name": "Bank Account Reconciliation With AI Tests",
       "publisher": "Microsoft"
     }
   ],
   "screenshots": [],
-  "platform": "24.0.0.0",
+  "platform": "27.0.0.0",
   "idRanges": [
     {
       "from": 7250,
@@ -33,6 +33,9 @@
     "includeSourceInSymbolFile": false
   },
   "target": "OnPrem",
-  "application": "24.0.0.0",
-  "features": ["TranslationFile", "GenerateCaptions"]
+  "application": "27.0.0.0",
+  "features": [
+    "TranslationFile",
+    "GenerateCaptions"
+  ]
 }

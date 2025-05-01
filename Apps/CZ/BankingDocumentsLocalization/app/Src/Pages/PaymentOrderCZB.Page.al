@@ -171,11 +171,22 @@ page 31262 "Payment Order CZB"
         }
         area(FactBoxes)
         {
+#if not CLEAN25
             part("Attached Documents"; "Document Attachment Factbox")
             {
+                ObsoleteTag = '25.0';
+                ObsoleteState = Pending;
+                ObsoleteReason = 'The "Document Attachment FactBox" has been replaced by "Doc. Attachment List Factbox", which supports multiple files upload.';
                 ApplicationArea = All;
                 Caption = 'Attachments';
-                SubPageLink = "Table ID" = const(31256), "No." = field("No.");
+                SubPageLink = "Table ID" = const(Database::"Payment Order Header CZB"), "No." = field("No.");
+            }
+#endif
+            part("Attached Documents List"; "Doc. Attachment List Factbox")
+            {
+                ApplicationArea = All;
+                Caption = 'Documents';
+                SubPageLink = "Table ID" = const(Database::"Payment Order Header CZB"), "No." = field("No.");
             }
             systempart(Links; Links)
             {
@@ -334,6 +345,20 @@ page 31262 "Payment Order CZB"
                     trigger OnAction()
                     begin
                         IssueDocument(Codeunit::"Issue Payment Order YesNo CZB");
+                    end;
+                }
+                action(IssueAndExport)
+                {
+                    ApplicationArea = Basic, Suite;
+                    Caption = 'Issue and Export';
+                    Ellipsis = true;
+                    Image = ReleaseDoc;
+                    ShortCutKey = 'Ctrl+F9';
+                    ToolTip = 'Issue the payment order and export a file. The payment order will be moved to issued payment orders.';
+
+                    trigger OnAction()
+                    begin
+                        IssueDocument(Codeunit::"Issue Payment Order Export CZB");
                     end;
                 }
                 action(IssueAndPrint)
@@ -501,6 +526,9 @@ page 31262 "Payment Order CZB"
                 actionref(Issue_Promoted; Issue)
                 {
                 }
+                actionref(IssueAndExport_Promoted; IssueAndExport)
+                {
+                }
                 actionref(IssueAndPrint_Promoted; IssueAndPrint)
                 {
                 }
@@ -610,7 +638,8 @@ page 31262 "Payment Order CZB"
         Rec.SendToIssuing(IssuingCodeunitID);
         CurrPage.Update(false);
 
-        if IssuingCodeunitID <> Codeunit::"Issue Payment Order YesNo CZB" then
+        if (IssuingCodeunitID <> Codeunit::"Issue Payment Order YesNo CZB") and
+           (IssuingCodeunitID <> Codeunit::"Issue Payment Order Export CZB") then
             exit;
 
         if InstructionMgt.IsEnabled(InstructionMgtCZB.GetOpeningIssuedDocumentNotificationId()) then
@@ -638,10 +667,8 @@ page 31262 "Payment Order CZB"
     local procedure DeterminePaymentOrderCZBSeriesNo(): Code[20]
     var
         BankAccount: Record "Bank Account";
-        PaymentOrderHeaderCZB: Record "Payment Order Header CZB";
     begin
         BankAccount.Get(Rec."Bank Account No.");
-        DocumentNoVisibility.CheckNumberSeries(PaymentOrderHeaderCZB, BankAccount."Payment Order Nos. CZB", PaymentOrderHeaderCZB.FieldNo("No."));
         exit(BankAccount."Payment Order Nos. CZB");
     end;
 

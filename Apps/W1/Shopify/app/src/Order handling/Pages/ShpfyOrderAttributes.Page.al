@@ -20,12 +20,12 @@ page 30114 "Shpfy Order Attributes"
                 field("Key"; Rec."Key")
                 {
                     ApplicationArea = All;
-                    ToolTip = 'The key or name of the attribute.';
+                    ToolTip = 'Specifies the key or name of the attribute.';
                 }
-                field(Value; Rec.Value)
+                field("Attribute Value"; Rec."Attribute Value")
                 {
                     ApplicationArea = All;
-                    ToolTip = 'The value of the attribute.';
+                    ToolTip = 'Specifies the value of the attribute.';
                 }
             }
         }

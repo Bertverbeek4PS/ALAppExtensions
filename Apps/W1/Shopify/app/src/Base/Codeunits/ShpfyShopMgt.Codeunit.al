@@ -6,8 +6,8 @@ codeunit 30211 "Shpfy Shop Mgt."
 {
     var
         DontShowThisAgainMsg: Label 'Don''t show this again.';
-        ExpirationNotificationMsg: Label 'The Shopify API used by your current Shopify connector will go out of support on %1. Please upgrade the Shopify connector and your Business Central environment.', Comment = '%1 - expiry date';
-        BlockedNotificationMsg: Label 'The Shopify API used by your current Shopify connector is no longer supported. To continue using the Shopify connector, please upgrade the Shopify connector and your Business Central environment.';
+        ExpirationNotificationMsg: Label 'The Shopify Admin API used by your current Shopify connector will go out of support on %1. Please upgrade your Business Central environment.', Comment = '%1 - expiry date';
+        BlockedNotificationMsg: Label 'The Shopify Admin API used by your current Shopify connector is no longer supported. To continue using the Shopify connector, please upgrade your Business Central environment.';
         ExpirationNotificationNameTok: Label 'Notify user of Shopify connector going out of support.';
         ExpirationNotificationDescTok: Label 'Show a notification informing the user that Shopify connector going out of support.';
         BlockedNotificationNameTok: Label 'Notify user of Shopify connector is out of support.';
@@ -24,15 +24,6 @@ codeunit 30211 "Shpfy Shop Mgt."
 
         Shop.SetRange(Enabled, true);
         exit(not Shop.IsEmpty());
-    end;
-
-    [EventSubscriber(ObjectType::Report, Report::"Copy Company", 'OnAfterCreatedNewCompanyByCopyCompany', '', false, false)]
-    local procedure HandleOnAfterCreatedNewCompanyByCopyCompany(NewCompanyName: Text[30])
-    var
-        Shop: Record "Shpfy Shop";
-    begin
-        Shop.ChangeCompany(NewCompanyName);
-        Shop.ModifyAll(Enabled, false);
     end;
 
     internal procedure SendExpirationNotification(ExpiryDate: Date)

@@ -97,13 +97,11 @@ report 11734 "Receipt Cash Document CZP"
             column(CurrencyCode_CashDocumentHeader; "Currency Code")
             {
             }
-            column(VATDate_CashDocumentHeader; "VAT Date")
+            column(VATDate_CashDocumentHeader; Format("VAT Date"))
             {
-                IncludeCaption = true;
             }
-            column(DocumentDate_CashDocumentHeader; "Document Date")
+            column(DocumentDate_CashDocumentHeader; Format("Document Date"))
             {
-                IncludeCaption = true;
             }
             column(PaymentPurpose_CashDocumentHeader; "Payment Purpose")
             {
@@ -171,6 +169,9 @@ report 11734 "Receipt Cash Document CZP"
                     column(VATBaseAmount_CashDocumentLine; "VAT Base Amount")
                     {
                         IncludeCaption = true;
+                    }
+                    column(AccountType_CashDocumentLine; Format("Account Type", 0, 2))
+                    {
                     }
 
                     trigger OnPreDataItem()
@@ -330,17 +331,21 @@ report 11734 "Receipt Cash Document CZP"
         CreatedLbl = 'Created by';
         ReleasedLbl = 'Released by';
         CopyLbl = 'Copy';
+        VATDateLbl = 'VAT Date';
+        DocumentDateLbl = 'Document Date';
     }
 
     var
-        TempVATAmountLine: Record "VAT Amount Line" temporary;
         CurrencyExchangeRate: Record "Currency Exchange Rate";
         FormatAddress: Codeunit "Format Address";
         CashDeskManagementCZP: Codeunit "Cash Desk Management CZP";
-        ExchRateText: Text[50];
-        CompanyAddr: array[8] of Text[100];
-        CalculatedExchRate: Decimal;
         ExchangeRateTxt: Label 'Exchange Rate %1 %2 / %3 %4', Comment = '%1 = Calculated Exchange Rate Amount; %2 = LCY Code; %3 = Exchange Rate Amount; %4 = Currency Code';
+
+    protected var
+        TempVATAmountLine: Record "VAT Amount Line" temporary;
+        CompanyAddr: array[8] of Text[100];
+        ExchRateText: Text[50];
+        CalculatedExchRate: Decimal;
         NoOfCopies: Integer;
         NoOfLoops: Integer;
 

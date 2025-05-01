@@ -1,3 +1,19 @@
+// ------------------------------------------------------------------------------------------------
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License. See License.txt in the project root for license information.
+// ------------------------------------------------------------------------------------------------
+
+namespace Microsoft.DemoData.Warehousing;
+
+using Microsoft.Warehouse.Setup;
+using Microsoft.DemoTool.Helpers;
+using Microsoft.Inventory.Location;
+using Microsoft.Warehouse.Activity;
+using Microsoft.Warehouse.Structure;
+using Microsoft.Manufacturing.Setup;
+using Microsoft.Projects.Project.Setup;
+using Microsoft.Assembly.Document;
+
 codeunit 4787 "Create Whse Location"
 {
     InherentEntitlements = X;
@@ -172,6 +188,7 @@ codeunit 4787 "Create Whse Location"
         ContosoWarehouse.InsertBin(WhseDemoDataSetup."Location Bin", 'S-7-03', '', OperationZone(), '', '', 0, 0, 0, 0, false, true, '');
         ContosoWarehouse.InsertBin(WhseDemoDataSetup."Location Bin", 'S-7-04', '', OperationZone(), '', '', 0, 0, 0, 0, false, true, '');
         ContosoWarehouse.InsertBin(WhseDemoDataSetup."Location Bin", 'S-7-05', '', OperationZone(), '', '', 0, 0, 0, 0, false, true, '');
+        ContosoWarehouse.InsertBin(WhseDemoDataSetup."Location Bin", 'S-7-06', '', OperationZone(), '', '', 0, 0, 0, 0, false, true, '');
         ContosoWarehouse.InsertBin(WhseDemoDataSetup."Location Bin", 'S-8-01', '', ReceiveZone(), '', '', 0, 0, 5000000, 5000000, false, false, '');
         ContosoWarehouse.InsertBin(WhseDemoDataSetup."Location Bin", 'S-8-02', '', ReceiveZone(), '', '', 0, 0, 5000000, 5000000, false, false, '');
         ContosoWarehouse.InsertBin(WhseDemoDataSetup."Location Bin", 'S-8-03', '', ReceiveZone(), '', ColdClass(), 0, 0, 5000000, 5000000, false, false, '');
@@ -203,6 +220,7 @@ codeunit 4787 "Create Whse Location"
         ContosoWarehouse.InsertBin(WhseDemoDataSetup."Location Directed Pick", BinW070003(), '', OperationZone(), QualityControlBinType(), '', 0, 0, 0, 0, true, true, '');
         ContosoWarehouse.InsertBin(WhseDemoDataSetup."Location Directed Pick", BinW070004(), '', OperationZone(), QualityControlBinType(), '', 0, 0, 0, 0, true, true, '');
         ContosoWarehouse.InsertBin(WhseDemoDataSetup."Location Directed Pick", BinW070005(), '', OperationZone(), QualityControlBinType(), '', 0, 0, 0, 0, true, true, '');
+        ContosoWarehouse.InsertBin(WhseDemoDataSetup."Location Directed Pick", BinW070006(), '', OperationZone(), QualityControlBinType(), '', 0, 0, 0, 0, true, true, '');
         ContosoWarehouse.InsertBin(WhseDemoDataSetup."Location Directed Pick", BinW080001(), '', ReceiveZone(), ReceiveBinType(), '', 0, 0, 5000000, 5000000, false, false, '');
         ContosoWarehouse.InsertBin(WhseDemoDataSetup."Location Directed Pick", 'W-08-0002', '', ReceiveZone(), ReceiveBinType(), '', 0, 0, 5000000, 5000000, false, false, '');
         ContosoWarehouse.InsertBin(WhseDemoDataSetup."Location Directed Pick", 'W-08-0003', '', ReceiveZone(), ReceiveBinType(), ColdClass(), 0, 0, 5000000, 5000000, false, false, '');
@@ -234,6 +252,7 @@ codeunit 4787 "Create Whse Location"
         Location.Validate("Open Shop Floor Bin Code", BinW070001());
         Location.Validate("To-Production Bin Code", BinW070002());
         Location.Validate("From-Production Bin Code", BinW070003());
+        Location.Validate("To-Job Bin Code", BinW070006());
         Location.Modify(true);
     end;
 
@@ -391,5 +410,10 @@ codeunit 4787 "Create Whse Location"
     procedure BinW070005(): Code[20]
     begin
         exit('W-07-0005');
+    end;
+
+    procedure BinW070006(): Code[20]
+    begin
+        exit('W-07-0006');
     end;
 }

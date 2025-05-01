@@ -97,9 +97,8 @@ report 11736 "Posted Rcpt. Cash Document CZP"
             column(CurrencyCode_PostedCashDocumentHeader; "Currency Code")
             {
             }
-            column(PostingDate_PostedCashDocumentHeader; "Posting Date")
+            column(PostingDate_PostedCashDocumentHeader; Format("Posting Date"))
             {
-                IncludeCaption = true;
             }
             column(PaymentPurpose_PostedCashDocumentHeader; "Payment Purpose")
             {
@@ -164,6 +163,9 @@ report 11736 "Posted Rcpt. Cash Document CZP"
                     column(VATBaseAmount_PostedCashDocumentLine; "VAT Base Amount")
                     {
                         IncludeCaption = true;
+                    }
+                    column(AccountType_PostedCashDocumentLine; Format("Account Type", 0, 2))
+                    {
                     }
 
                     trigger OnPreDataItem()
@@ -401,12 +403,16 @@ report 11736 "Posted Rcpt. Cash Document CZP"
         FIKLbl = 'FIK:';
         PKPLbl = 'PKP:';
         CopyLbl = 'Copy';
+        PostingDateLbl = 'Posting Date';
     }
 
     var
-        TempVATAmountLine: Record "VAT Amount Line" temporary;
         CurrencyExchangeRate: Record "Currency Exchange Rate";
         FormatAddress: Codeunit "Format Address";
+        ExchangeRateTxt: Label 'Exchange Rate %1 %2 / %3 %4', Comment = '%1 = Calculated Exchange Rate Amount; %2 = LCY Code; %3 = Exchange Rate Amount; %4 = Currency Code';
+
+    protected var
+        TempVATAmountLine: Record "VAT Amount Line" temporary;
         CompanyAddr: array[8] of Text[100];
         ExchRateText: Text[50];
         CalculatedExchRate: Decimal;
@@ -414,7 +420,6 @@ report 11736 "Posted Rcpt. Cash Document CZP"
         NoOfLoops: Integer;
         PrintAccountingSheet: Boolean;
         PrintVATSpecification: Boolean;
-        ExchangeRateTxt: Label 'Exchange Rate %1 %2 / %3 %4', Comment = '%1 = Calculated Exchange Rate Amount; %2 = LCY Code; %3 = Exchange Rate Amount; %4 = Currency Code';
 
     procedure InitializeRequest(NewNoOfCopies: Integer; NewPrintAccountingSheet: Boolean; NewPrintVATSpecification: Boolean)
     begin

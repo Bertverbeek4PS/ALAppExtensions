@@ -11,15 +11,13 @@ using Microsoft.Finance.GeneralLedger.Account;
 using Microsoft.Finance.GeneralLedger.Journal;
 using Microsoft.Finance.GeneralLedger.Posting;
 using Microsoft.Finance.GeneralLedger.Preview;
-#if not CLEAN22
-using Microsoft.Finance.VAT.Calculation;
-#endif
 using Microsoft.FixedAssets.FixedAsset;
 using Microsoft.Foundation.AuditCodes;
 using Microsoft.HumanResources.Employee;
 using Microsoft.Inventory.Location;
 using Microsoft.Purchases.Vendor;
 using Microsoft.Sales.Customer;
+using System.Utilities;
 
 #pragma warning disable AL0432
 codeunit 11729 "Cash Document-Post CZP"
@@ -67,7 +65,7 @@ codeunit 11729 "Cash Document-Post CZP"
         SourceCodeSetup.TestField("Cash Desk CZP");
         OnRunOnBeforeCheckCashDocument(CashDocumentHeaderCZP, NoCheckCashDocument);
         if not NoCheckCashDocument then
-            CashDocumentReleaseCZP.CheckCashDocument(Rec);
+            CashDocumentReleaseCZP.CheckCashDocumentForPosting(Rec);
         OnRunOnAfterCheckCashDocument(CashDocumentHeaderCZP, NoCheckCashDocument);
 
         WindowDialog.Open(DialogMsg);
@@ -81,6 +79,7 @@ codeunit 11729 "Cash Document-Post CZP"
         OnBeforePostedCashDocHeaderInsert(PostedCashDocumentHdrCZP, CashDocumentHeaderCZP);
         PostedCashDocumentHdrCZP.Insert();
         OnAfterPostedCashDocHeaderInsert(PostedCashDocumentHdrCZP, CashDocumentHeaderCZP);
+        RecordLinkManagement.CopyLinks(CashDocumentHeaderCZP, PostedCashDocumentHdrCZP);
 
         PostHeader();
         PostLines();
@@ -102,6 +101,7 @@ codeunit 11729 "Cash Document-Post CZP"
         DimensionManagement: Codeunit DimensionManagement;
         CashDocumentReleaseCZP: Codeunit "Cash Document-Release CZP";
         GenJnlPostPreview: Codeunit "Gen. Jnl.-Post Preview";
+        RecordLinkManagement: Codeunit "Record Link Management";
         WindowDialog: Dialog;
         DialogMsg: Label 'Posting Document #1#################################\\Posting Lines #2######\', Comment = '%1 = Cash Desk No. & "Cash Document Type & No., %2 = Line Count';
         PostingDateOutRangeErr: Label 'is not within your range of allowed posting dates';
@@ -122,11 +122,6 @@ codeunit 11729 "Cash Document-Post CZP"
         TempGenJournalLine.Description := CashDocumentHeaderCZP."Payment Purpose";
         TempGenJournalLine."Posting Date" := CashDocumentHeaderCZP."Posting Date";
         TempGenJournalLine."Document Date" := CashDocumentHeaderCZP."Document Date";
-#if not CLEAN22
-#pragma warning disable AL0432
-        TempGenJournalLine."VAT Date CZL" := CashDocumentHeaderCZP."VAT Date";
-#pragma warning restore AL0432
-#endif
         TempGenJournalLine."VAT Reporting Date" := CashDocumentHeaderCZP."VAT Date";
         TempGenJournalLine."Original Doc. VAT Date CZL" := CashDocumentHeaderCZP."VAT Date";
         TempGenJournalLine."Account Type" := TempGenJournalLine."Account Type"::"Bank Account";
@@ -223,11 +218,6 @@ codeunit 11729 "Cash Document-Post CZP"
 
     procedure InitGenJnlLine(InitCashDocumentHeaderCZP: Record "Cash Document Header CZP"; InitCashDocumentLineCZP: Record "Cash Document Line CZP")
     var
-#if not CLEAN22
-#pragma warning disable AL0432
-        ReplaceVATDateMgtCZL: Codeunit "Replace VAT Date Mgt. CZL";
-#pragma warning restore AL0432
-#endif
         Sign: Integer;
     begin
         TempGenJournalLine.Init();
@@ -240,13 +230,6 @@ codeunit 11729 "Cash Document-Post CZP"
         TempGenJournalLine."Document No." := InitCashDocumentHeaderCZP."No.";
         TempGenJournalLine."External Document No." := InitCashDocumentLineCZP."External Document No.";
         TempGenJournalLine."Posting Date" := InitCashDocumentHeaderCZP."Posting Date";
-#if not CLEAN22
-#pragma warning disable AL0432
-        if not ReplaceVATDateMgtCZL.IsEnabled() then
-            TempGenJournalLine.Validate("VAT Date CZL", InitCashDocumentHeaderCZP."VAT Date")
-        else
-#pragma warning restore AL0432
-#endif
         TempGenJournalLine.Validate("VAT Reporting Date", InitCashDocumentHeaderCZP."VAT Date");
         TempGenJournalLine.Validate("Original Doc. VAT Date CZL", InitCashDocumentHeaderCZP."VAT Date");
         TempGenJournalLine."Posting Group" := InitCashDocumentLineCZP."Posting Group";
@@ -288,6 +271,14 @@ codeunit 11729 "Cash Document-Post CZP"
         TempGenJournalLine.Amount := InitCashDocumentLineCZP."Amount Including VAT" * Sign;
         TempGenJournalLine."Amount (LCY)" := InitCashDocumentLineCZP."Amount Including VAT (LCY)" * Sign;
         TempGenJournalLine."VAT Difference" := InitCashDocumentLineCZP."VAT Difference" * Sign;
+        TempGenJournalLine."Non-Deductible VAT %" := InitCashDocumentLineCZP."Non-Deductible VAT %";
+        TempGenJournalLine."Non-Deductible VAT Base" := InitCashDocumentLineCZP."Non-Deductible VAT Base" * Sign;
+        TempGenJournalLine."Non-Deductible VAT Amount" := InitCashDocumentLineCZP."Non-Deductible VAT Amount" * Sign;
+        TempGenJournalLine."Non-Deductible VAT Base LCY" := InitCashDocumentLineCZP."Non-Deductible VAT Base LCY" * Sign;
+        TempGenJournalLine."Non-Deductible VAT Amount LCY" := InitCashDocumentLineCZP."Non-Deductible VAT Amount LCY" * Sign;
+        TempGenJournalLine."Non-Deductible VAT Base ACY" := InitCashDocumentLineCZP."Non-Deductible VAT Base ACY" * Sign;
+        TempGenJournalLine."Non-Deductible VAT Amount ACY" := InitCashDocumentLineCZP."Non-Deductible VAT Amount ACY" * Sign;
+        TempGenJournalLine."Non-Deductible VAT Diff." := InitCashDocumentLineCZP."Non-Deductible VAT Diff." * Sign;
         TempGenJournalLine."Gen. Posting Type" := InitCashDocumentLineCZP."Gen. Posting Type";
         TempGenJournalLine."Applies-to Doc. Type" := InitCashDocumentLineCZP."Applies-To Doc. Type";
         TempGenJournalLine."Applies-to Doc. No." := InitCashDocumentLineCZP."Applies-To Doc. No.";
@@ -306,6 +297,18 @@ codeunit 11729 "Cash Document-Post CZP"
         TempGenJournalLine."Source Curr. VAT Base Amount" := TempGenJournalLine."VAT Base Amount";
         TempGenJournalLine."Source Curr. VAT Amount" := TempGenJournalLine."VAT Amount";
         TempGenJournalLine."System-Created Entry" := true;
+        if InitCashDocumentLineCZP."Project No." <> '' then begin
+            TempGenJournalLine."System-Created Entry" := false;
+            TempGenJournalLine.Validate(TempGenJournalLine."Job No.", InitCashDocumentLineCZP."Project No.");
+            TempGenJournalLine.Validate(TempGenJournalLine."Job Task No.", InitCashDocumentLineCZP."Project Task No.");
+            TempGenJournalLine.Validate(TempGenJournalLine."Job Line Type", InitCashDocumentLineCZP."Project Line Type");
+            TempGenJournalLine.Validate("Job Planning Line No.", InitCashDocumentLineCZP."Project Planning Line No.");
+            TempGenJournalLine.Validate(TempGenJournalLine."Job Quantity", InitCashDocumentLineCZP."Project Quantity");
+            if InitCashDocumentLineCZP."Document Type" = InitCashDocumentLineCZP."Document Type"::Receipt then
+                TempGenJournalLine.Validate(TempGenJournalLine."Job Unit Price", InitCashDocumentLineCZP."Project Unit Price" * -1)
+            else
+                TempGenJournalLine.Validate(TempGenJournalLine."Job Unit Price", InitCashDocumentLineCZP."Project Unit Price");
+        end;
         TempGenJournalLine."Shortcut Dimension 1 Code" := InitCashDocumentLineCZP."Shortcut Dimension 1 Code";
         TempGenJournalLine."Shortcut Dimension 2 Code" := InitCashDocumentLineCZP."Shortcut Dimension 2 Code";
         TempGenJournalLine."Dimension Set ID" := InitCashDocumentLineCZP."Dimension Set ID";
@@ -342,11 +345,7 @@ codeunit 11729 "Cash Document-Post CZP"
         CashDocumentLineCZP.Reset();
         CashDocumentLineCZP.SetRange("Cash Desk No.", CashDocumentHeaderCZP."Cash Desk No.");
         CashDocumentLineCZP.SetRange("Cash Document No.", CashDocumentHeaderCZP."No.");
-        if CashDocumentLineCZP.FindFirst() then
-            repeat
-                if CashDocumentLineCZP.HasLinks then
-                    CashDocumentLineCZP.DeleteLinks();
-            until CashDocumentLineCZP.Next() = 0;
+        RecordLinkManagement.RemoveLinks(CashDocumentLineCZP);
         CashDocumentLineCZP.DeleteAll();
     end;
 

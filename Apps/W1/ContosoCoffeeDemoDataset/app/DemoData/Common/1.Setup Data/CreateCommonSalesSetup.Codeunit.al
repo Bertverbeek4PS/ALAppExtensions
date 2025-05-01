@@ -1,3 +1,12 @@
+// ------------------------------------------------------------------------------------------------
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License. See License.txt in the project root for license information.
+// ------------------------------------------------------------------------------------------------
+
+namespace Microsoft.DemoData.Common;
+
+using Microsoft.Sales.Setup;
+
 codeunit 5141 "Create Common Sales Setup"
 {
     InherentEntitlements = X;
@@ -16,6 +25,12 @@ codeunit 5141 "Create Common Sales Setup"
 
         if SalesReceivablesSetup."Order Nos." = '' then
             SalesReceivablesSetup.Validate("Order Nos.", CommonNoSeries.SalesOrder());
+
+        if SalesReceivablesSetup."Invoice Nos." = '' then
+            SalesReceivablesSetup.Validate("Invoice Nos.", CommonNoSeries.SalesInvoice());
+
+        if SalesReceivablesSetup."Posted Invoice Nos." = '' then
+            SalesReceivablesSetup.Validate("Posted Invoice Nos.", CommonNoSeries.PostedSalesInvoice());
 
         SalesReceivablesSetup.Modify();
     end;

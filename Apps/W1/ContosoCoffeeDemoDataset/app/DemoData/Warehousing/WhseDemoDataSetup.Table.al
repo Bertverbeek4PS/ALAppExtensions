@@ -1,16 +1,27 @@
+#if not CLEANSCHEMA26
+// ------------------------------------------------------------------------------------------------
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License. See License.txt in the project root for license information.
+// ------------------------------------------------------------------------------------------------
+
+namespace Microsoft.DemoData.Warehousing;
+
+using Microsoft.Inventory.Location;
+using Microsoft.Finance.VAT.Setup;
+using Microsoft.Inventory.Item;
+using Microsoft.Finance.GeneralLedger.Setup;
+using Microsoft.Purchases.Vendor;
+using Microsoft.Sales.Customer;
+
 table 4763 "Whse Demo Data Setup"
 {
     DataClassification = CustomerContent;
     ObsoleteReason = 'The table is moved to "Warehouse Module Setup" table';
     InherentEntitlements = rimdX;
     InherentPermissions = rimdX;
-#if not CLEAN23
-    ObsoleteState = Pending;
-    ObsoleteTag = '23.0';
-#else
     ObsoleteState = Removed;
     ObsoleteTag = '26.0';
-#endif
+    ReplicateData = false;
 
     fields
     {
@@ -60,6 +71,7 @@ table 4763 "Whse Demo Data Setup"
             DataClassification = CustomerContent;
             Caption = 'Domestic - VAT Posting Group';
             TableRelation = "VAT Business Posting Group";
+            ValidateTableRelation = false;
         }
         field(35; "Resale Code"; code[20])
         {
@@ -213,3 +225,4 @@ table 4763 "Whse Demo Data Setup"
         }
     }
 }
+#endif

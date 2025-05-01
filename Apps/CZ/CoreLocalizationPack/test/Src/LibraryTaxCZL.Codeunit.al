@@ -268,7 +268,7 @@ Codeunit 148003 "Library - Tax CZL"
 
     procedure PrintVATStatement(var VATStatementLine: Record "VAT Statement Line"; ShowRequestPage: Boolean)
     begin
-        Report.Run(Report::"VAT Statement CZL", ShowRequestPage, false, VATStatementLine);
+        Report.Run(Report::"VAT Statement", ShowRequestPage, false, VATStatementLine);
     end;
 
     procedure PrintTestVATControlReport(var VATCtrlReportHeaderCZL: Record "VAT Ctrl. Report Header CZL")
@@ -458,21 +458,25 @@ Codeunit 148003 "Library - Tax CZL"
         GeneralLedgerSetup: Record "General Ledger Setup";
     begin
         GeneralLedgerSetup.Get();
-#if not CLEAN22
-#pragma warning disable AL0432
-        GeneralLedgerSetup."Use VAT Date CZL" := UseVATDate;
-#pragma warning restore AL0432
-#endif
         GeneralLedgerSetup."VAT Reporting Date Usage" := Enum::"VAT Reporting Date Usage"::Disabled;
         if UseVATDate then
             GeneralLedgerSetup."VAT Reporting Date Usage" := Enum::"VAT Reporting Date Usage"::Enabled;
         GeneralLedgerSetup.Modify();
     end;
 
+#if not CLEAN26
+    [Obsolete('Replaced by SetXMLFormat function with "VAT Statement Name" parameter.', '26.0')]
     procedure SetXMLFormat(var VATStatementTemplate: Record "VAT Statement Template"; XMLFormat: Enum "VAT Statement XML Format CZL")
     begin
         VATStatementTemplate."XML Format CZL" := XMLFormat;
         VATStatementTemplate.Modify();
+    end;
+
+#endif
+    procedure SetXMLFormat(var VATStatementName: Record "VAT Statement Name"; XMLFormat: Enum "VAT Statement XML Format CZL")
+    begin
+        VATStatementName."XML Format CZL" := XMLFormat;
+        VATStatementName.Modify();
     end;
 
     procedure SuggestVATControlReportLines(var VATCtrlReportHeaderCZL: Record "VAT Ctrl. Report Header CZL")

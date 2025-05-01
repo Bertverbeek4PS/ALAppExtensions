@@ -1,3 +1,12 @@
+// ------------------------------------------------------------------------------------------------
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License. See License.txt in the project root for license information.
+// ------------------------------------------------------------------------------------------------
+
+namespace Microsoft.DemoData.Common;
+
+using Microsoft.DemoTool.Helpers;
+
 codeunit 5130 "Create Common Unit Of Measure"
 {
     InherentEntitlements = X;
@@ -21,6 +30,9 @@ codeunit 5130 "Create Common Unit Of Measure"
         ContosoUnitOfMeasure.InsertUnitOfMeasure(Bag(), BagLbl, 'BAG');
         ContosoUnitOfMeasure.InsertUnitOfMeasure(Gram(), GramTok, 'GRM');
         ContosoUnitOfMeasure.InsertUnitOfMeasure(L(), LiterTok, 'LTR');
+        ContosoUnitOfMeasure.InsertUnitOfMeasure(Ton(), TonneLbl, 'TN');
+        ContosoUnitOfMeasure.InsertUnitOfMeasure(KWH(), KWHLbl, 'KWH');
+        ContosoUnitOfMeasure.InsertUnitOfMeasure(ML(), MilliliterTok, 'ML');
     end;
 
     var
@@ -52,6 +64,12 @@ codeunit 5130 "Create Common Unit Of Measure"
         GramTok: Label 'Gram', MaxLength = 10;
         LTok: Label 'L', MaxLength = 10;
         LiterTok: Label 'Liter', MaxLength = 10;
+        MLTok: Label 'ML', MaxLength = 10;
+        MilliliterTok: Label 'Milliliter', MaxLength = 10;
+        TTok: Label 'T', MaxLength = 10;
+        TonneLbl: Label 'Tonne', MaxLength = 10;
+        KWHTok: Label 'KWH', MaxLength = 10;
+        KWHLbl: Label 'KW Hour', MaxLength = 10;
 
     procedure Bag(): Code[10]
     begin
@@ -123,4 +141,18 @@ codeunit 5130 "Create Common Unit Of Measure"
         exit(LTok);
     end;
 
+    procedure ML(): Code[10]
+    begin
+        exit(MLTok);
+    end;
+
+    procedure Ton(): Code[10]
+    begin
+        exit(TTok);
+    end;
+
+    procedure KWH(): Code[10]
+    begin
+        exit(KWHTok);
+    end;
 }

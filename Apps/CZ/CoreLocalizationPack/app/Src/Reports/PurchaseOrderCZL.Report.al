@@ -21,14 +21,14 @@ using Microsoft.Utilities;
 using System.Email;
 using System.Globalization;
 using System.Security.User;
+using System.Text;
 using System.Utilities;
 
 report 31185 "Purchase Order CZL"
 {
-    DefaultLayout = RDLC;
-    RDLCLayout = './Src/Reports/PurchaseOrder.rdl';
     Caption = 'Purchase Order';
     PreviewMode = PrintLayout;
+    DefaultRenderingLayout = "PurchaseOrder.rdl";
     WordMergeDataItem = "Purchase Header";
 
     dataset
@@ -155,14 +155,6 @@ report 31185 "Purchase Order CZL"
             column(UoMLbl; UoMLbl)
             {
             }
-#if not CLEAN22
-            column(CreatorLbl; CreatedByLbl)
-            {
-                ObsoleteState = Pending;
-                ObsoleteTag = '22.0';
-                ObsoleteReason = 'Replaced by column CreatedByLbl.';
-            }
-#endif
             column(SubtotalLbl; SubtotalLbl)
             {
             }
@@ -223,19 +215,19 @@ report 31185 "Purchase Order CZL"
             column(DocumentDate_PurchaseHeaderCaption; FieldCaption("Document Date"))
             {
             }
-            column(DocumentDate_PurchaseHeader; "Document Date")
+            column(DocumentDate_PurchaseHeader; Format("Document Date"))
             {
             }
             column(ExpectedReceiptDate_PurchaseHeaderCaption; FieldCaption("Expected Receipt Date"))
             {
             }
-            column(ExpectedReceiptDate_PurchaseHeader; "Expected Receipt Date")
+            column(ExpectedReceiptDate_PurchaseHeader; Format("Expected Receipt Date"))
             {
             }
             column(OrderDate_PurchaseHeaderCaption; FieldCaption("Order Date"))
             {
             }
-            column(OrderDate_PurchaseHeader; FormatDate("Order Date"))
+            column(OrderDate_PurchaseHeader; Format("Order Date"))
             {
             }
             column(PaymentTerms; PaymentTerms.Description)
@@ -262,10 +254,16 @@ report 31185 "Purchase Order CZL"
             column(Amount_PurchaseHeader; Amount)
             {
             }
+            column(Formatted_Amount_PurchaseHeader; format(Amount, 0, AutoFormat.ResolveAutoFormat(Enum::"Auto Format"::AmountFormat, "Purchase Header"."Currency Code")))
+            {
+            }
             column(AmountIncludingVAT_PurchaseHeaderCaption; FieldCaption("Amount Including VAT"))
             {
             }
             column(AmountIncludingVAT_PurchaseHeader; "Amount Including VAT")
+            {
+            }
+            column(Formatted_AmountIncludingVAT_PurchaseHeader; format("Amount Including VAT", 0, AutoFormat.ResolveAutoFormat(Enum::"Auto Format"::AmountFormat, "Purchase Header"."Currency Code")))
             {
             }
             column(DocFooterText; DocFooterText)
@@ -387,6 +385,9 @@ report 31185 "Purchase Order CZL"
                     column(LineAmount_PurchaseLine; "Line Amount")
                     {
                     }
+                    column(Formatted_LineAmount_PurchaseLine; format("Line Amount", 0, AutoFormat.ResolveAutoFormat(Enum::"Auto Format"::AmountFormat, "Purchase Header"."Currency Code")))
+                    {
+                    }
                     column(InvDiscountAmount_PurchaseLineCaption; FieldCaption("Inv. Discount Amount"))
                     {
                     }
@@ -394,45 +395,6 @@ report 31185 "Purchase Order CZL"
                     {
                     }
                 }
-#if not CLEAN22
-                dataitem("User Setup"; "User Setup")
-                {
-                    DataItemTableView = sorting("User ID");
-                    ObsoleteState = Pending;
-                    ObsoleteTag = '22.0';
-                    ObsoleteReason = 'Replaced by dataitem UserCreator.';
-                    dataitem(Employee; Employee)
-                    {
-                        DataItemLink = "No." = field("Employee No. CZL");
-                        DataItemTableView = sorting("No.");
-                        ObsoleteState = Pending;
-                        ObsoleteTag = '22.0';
-                        ObsoleteReason = 'Replaced by dataitem EmployeeCreator.';
-                        column(FullName_Employee; FullName())
-                        {
-                            ObsoleteState = Pending;
-                            ObsoleteTag = '22.0';
-                            ObsoleteReason = 'Replaced by column FullName_EmployeeCreator.';
-                        }
-                        column(PhoneNo_Employee; "Phone No.")
-                        {
-                            ObsoleteState = Pending;
-                            ObsoleteTag = '22.0';
-                            ObsoleteReason = 'Replaced by column PhoneNo_EmployeeCreator.';
-                        }
-                        column(CompanyEMail_Employee; "Company E-Mail")
-                        {
-                            ObsoleteState = Pending;
-                            ObsoleteTag = '22.0';
-                            ObsoleteReason = 'Replaced by column CompanyEMail_EmployeeCreator.';
-                        }
-                    }
-                    trigger OnPreDataItem()
-                    begin
-                        SetRange("User ID", UserId);
-                    end;
-                }
-#endif
                 trigger OnPostDataItem()
                 begin
                     if not IsReportInPreviewMode() then
@@ -532,6 +494,25 @@ report 31185 "Purchase Order CZL"
             LogInteractionEnable := LogInteraction;
         end;
     }
+
+    rendering
+    {
+        layout("PurchaseOrder.rdl")
+        {
+            Type = RDLC;
+            LayoutFile = './Src/Reports/PurchaseOrder.rdl';
+            Caption = 'Purchase Order (RDL)';
+            Summary = 'The Purchase Order (RDL) provides a detailed layout.';
+        }
+        layout("PurchaseOrderEmail.docx")
+        {
+            Type = Word;
+            LayoutFile = './Src/Reports/PurchaseOrderEmail.docx';
+            Caption = 'Purchase Order Email (Word)';
+            Summary = 'The Purchase Order Email (Word) provides an email body layout.';
+        }
+    }
+
     trigger OnInitReport()
     begin
         PurchasesPayablesSetup.Get();
@@ -546,23 +527,13 @@ report 31185 "Purchase Order CZL"
     var
         PurchasesPayablesSetup: Record "Purchases & Payables Setup";
         Vendor: Record Vendor;
-        PaymentTerms: Record "Payment Terms";
-        PaymentMethod: Record "Payment Method";
-        ShipmentMethod: Record "Shipment Method";
         LanguageMgt: Codeunit Language;
         FormatAddress: Codeunit "Format Address";
         FormatDocument: Codeunit "Format Document";
         FormatDocumentMgtCZL: Codeunit "Format Document Mgt. CZL";
         SegManagement: Codeunit SegManagement;
         ArchiveManagement: Codeunit ArchiveManagement;
-        CompanyAddr: array[8] of Text[100];
-        VendAddr: array[8] of Text[100];
-        ShipToAddr: array[8] of Text[100];
-        DocFooterText: Text[1000];
-        NoOfCopies: Integer;
-        NoOfLoops: Integer;
-        LogInteraction: Boolean;
-        ArchiveDocument: Boolean;
+        AutoFormat: Codeunit "Auto Format";
         LogInteractionEnable: Boolean;
         DocumentLbl: Label 'Order';
         PageLbl: Label 'Page';
@@ -584,6 +555,19 @@ report 31185 "Purchase Order CZL"
         ClosingLbl: Label 'Sincerely';
         BodyLbl: Label 'The purchase order is attached to this message.';
         DocumentNoLbl: Label 'No.';
+
+    protected var
+        PaymentMethod: Record "Payment Method";
+        PaymentTerms: Record "Payment Terms";
+        ShipmentMethod: Record "Shipment Method";
+        CompanyAddr: array[8] of Text[100];
+        ShipToAddr: array[8] of Text[100];
+        VendAddr: array[8] of Text[100];
+        DocFooterText: Text[1000];
+        NoOfCopies: Integer;
+        NoOfLoops: Integer;
+        ArchiveDocument: Boolean;
+        LogInteraction: Boolean;
 
     procedure InitializeRequest(NoOfCopiesFrom: Integer; ArchiveDocumentFrom: Boolean; LogInteractionFrom: Boolean)
     begin
@@ -607,13 +591,9 @@ report 31185 "Purchase Order CZL"
 
     local procedure FormatAddressFields(PurchaseHeader: Record "Purchase Header")
     begin
+        FormatAddress.SetLanguageCode(PurchaseHeader."Language Code");
         FormatAddress.PurchHeaderBuyFrom(VendAddr, PurchaseHeader);
         FormatAddress.PurchHeaderShipTo(ShipToAddr, PurchaseHeader);
-    end;
-
-    local procedure FormatDate(DateValue: Date): Text
-    begin
-        exit(Format(DateValue, 0, '<Day>.<Month>.<Year4>'));
     end;
 
     local procedure IsReportInPreviewMode(): Boolean

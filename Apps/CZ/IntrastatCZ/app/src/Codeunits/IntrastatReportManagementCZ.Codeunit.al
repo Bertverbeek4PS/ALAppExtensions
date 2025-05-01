@@ -5,9 +5,7 @@
 namespace Microsoft.Inventory.Intrastat;
 
 using Microsoft.FixedAssets.FixedAsset;
-#if not CLEAN24
-using Microsoft.Foundation.Company;
-#endif
+using Microsoft.FixedAssets.Ledger;
 using Microsoft.Foundation.Shipping;
 using Microsoft.Foundation.UOM;
 using Microsoft.Inventory.Item;
@@ -19,14 +17,10 @@ using Microsoft.Projects.Project.Journal;
 using Microsoft.Projects.Project.Ledger;
 using Microsoft.Purchases.Document;
 using Microsoft.Purchases.History;
-using Microsoft.Purchases.Posting;
-using Microsoft.Purchases.Reports;
 using Microsoft.Purchases.Vendor;
 using Microsoft.Sales.Customer;
 using Microsoft.Sales.Document;
 using Microsoft.Sales.History;
-using Microsoft.Sales.Posting;
-using Microsoft.Sales.Reports;
 using Microsoft.Service.Document;
 using Microsoft.Service.History;
 using Microsoft.Utilities;
@@ -42,54 +36,61 @@ codeunit 31302 IntrastatReportManagementCZ
     #region Init Setup
     [EventSubscriber(ObjectType::Codeunit, Codeunit::IntrastatReportManagement, 'OnBeforeInitSetup', '', true, true)]
     local procedure OnBeforeInitSetup(var IntrastatReportSetup: Record "Intrastat Report Setup"; var IsHandled: Boolean)
-    var
-        DataExchDef: Record "Data Exch. Def";
-#if not CLEAN22
-        StatutoryReportingSetupCZL: Record "Statutory Reporting Setup CZL";
-#endif
-        TempBlob: Codeunit "Temp Blob";
-        XMLOutStream: OutStream;
-        XMLInStream: InStream;
-        DataExchangeXMLTxt: Label '<?xml version="1.0" encoding="UTF-8" standalone="no"?> <root> <DataExchDef Code="INTRA-2022-CZ" Name="Intrastat Report 2022" Type="5" ReadingWritingXMLport="31300" ExternalDataHandlingCodeunit="4813" ColumnSeparator="2" FileType="1" ReadingWritingCodeunit="1276"> <DataExchLineDef LineType="1" Code="DEFAULT" Name="DEFAULT" ColumnCount="20"> <DataExchColumnDef ColumnNo="1" Name="Month of Declaration" Show="false" DataType="0" Length="2" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /> <DataExchColumnDef ColumnNo="2" Name="Year of Declaration" Show="false" DataType="0" Length="4" TextPaddingRequired="false" PadCharacter="&amp;#032;" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /> <DataExchColumnDef ColumnNo="3" Name="VAT Registration Number" Show="false" DataType="0" Length="10" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /> <DataExchColumnDef ColumnNo="4" Name="Arrival/Dispatch" Show="false" DataType="0" Length="1" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /> <DataExchColumnDef ColumnNo="5" Name="Partner ID" Show="false" DataType="0" Length="20" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /> <DataExchColumnDef ColumnNo="6" Name="Country of Dispatch/Arrival" Show="false" DataType="0" Length="2" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /> <DataExchColumnDef ColumnNo="7" Name="Region of Dispatch/Arrival" Show="false" DataType="0" Length="2" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /> <DataExchColumnDef ColumnNo="8" Name="Country of Origin" Show="false" DataType="0" Length="2" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /> <DataExchColumnDef ColumnNo="9" Name="Nature of Transaction" Show="false" DataType="0" Length="2" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /> <DataExchColumnDef ColumnNo="10" Name="Nature of Transport" Show="false" DataType="0" Length="1" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /> <DataExchColumnDef ColumnNo="11" Name="Delivery Terms" Show="false" DataType="0" Length="1" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /> <DataExchColumnDef ColumnNo="12" Name="Code of Movement" Show="false" DataType="0" Length="2" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /> <DataExchColumnDef ColumnNo="13" Name="Tariff No." Show="false" DataType="0" Length="8" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /> <DataExchColumnDef ColumnNo="14" Name="Statistical Sign" Show="false" DataType="0" Length="2" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /> <DataExchColumnDef ColumnNo="15" Name="Item Description" Show="false" DataType="0" Length="80" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /> <DataExchColumnDef ColumnNo="16" Name="Net Mass" Show="false" DataType="2" DataFormattingCulture="cs-CZ" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /> <DataExchColumnDef ColumnNo="17" Name="Quantity in Supplementary Units" Show="false" DataType="2" DataFormattingCulture="cs-CZ" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /> <DataExchColumnDef ColumnNo="18" Name="Invoiced Value" Show="false" DataType="2" DataFormattingCulture="cs-CZ" Length="14" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /> <DataExchColumnDef ColumnNo="19" Name="Internal Note 1" Show="false" DataType="0" Length="40" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /> <DataExchColumnDef ColumnNo="20" Name="Internal Note 2" Show="false" DataType="0" Length="40" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /> <DataExchMapping TableId="4812" Name="" KeyIndex="5" MappingCodeunit="1269"> <DataExchFieldMapping ColumnNo="1" FieldID="41" Optional="true" TransformationRule="INT_STAT_MONTH"> <TransformationRules> <Code>INT_STAT_MONTH</Code> <Description>Transforming intrastat Statistics Period to month.</Description> <TransformationType>4</TransformationType> <FindValue /> <ReplaceValue /> <StartPosition>3</StartPosition> <Length>2</Length> <DataFormat /> <DataFormattingCulture /> <NextTransformationRule /> <TableID>0</TableID> <SourceFieldID>0</SourceFieldID> <TargetFieldID>0</TargetFieldID> <FieldLookupRule>0</FieldLookupRule> <Precision>0.00</Precision> <Direction /> <ExportFromDateType>0</ExportFromDateType> </TransformationRules> </DataExchFieldMapping> <DataExchFieldMapping ColumnNo="2" FieldID="41" Optional="true" TransformationRule="INT_STAT_YEAR"> <TransformationRules> <Code>INT_STAT_YEAR</Code> <Description>Transforming intrastat Statistics Period to year.</Description> <TransformationType>11</TransformationType> <FindValue /> <ReplaceValue /> <StartPosition>0</StartPosition> <Length>0</Length> <DataFormat /> <DataFormattingCulture /> <NextTransformationRule /> <TableID>0</TableID> <SourceFieldID>0</SourceFieldID> <TargetFieldID>0</TargetFieldID> <FieldLookupRule>0</FieldLookupRule> <Precision>0.00</Precision> <Direction /> <ExportFromDateType>0</ExportFromDateType> </TransformationRules> </DataExchFieldMapping> <DataExchFieldMapping ColumnNo="3" FieldID="31310" Optional="true" /> <DataExchFieldMapping ColumnNo="4" FieldID="3" Optional="true" TransformationRule="INT_ARRIVALDISPATCH"> <TransformationRules> <Code>INT_ARRIVALDISPATCH</Code> <Description>Transforming intrastat "Receipt" type to letter ''A'' and "Shipment" type to letter ''D''.</Description> <TransformationType>11</TransformationType> <FindValue /> <ReplaceValue /> <StartPosition>0</StartPosition> <Length>0</Length> <DataFormat /> <DataFormattingCulture /> <NextTransformationRule /> <TableID>0</TableID> <SourceFieldID>0</SourceFieldID> <TargetFieldID>0</TargetFieldID> <FieldLookupRule>0</FieldLookupRule> <Precision>0.00</Precision> <Direction /> <ExportFromDateType>0</ExportFromDateType> </TransformationRules> </DataExchFieldMapping> <DataExchFieldMapping ColumnNo="5" FieldID="29" Optional="true" /> <DataExchFieldMapping ColumnNo="6" FieldID="7" Optional="true" TransformationRule="TRIM" /> <DataExchFieldMapping ColumnNo="7" FieldID="26" Optional="true" /> <DataExchFieldMapping ColumnNo="8" FieldID="24" Optional="true" /> <DataExchFieldMapping ColumnNo="9" FieldID="8" Optional="true" /> <DataExchFieldMapping ColumnNo="10" FieldID="9" Optional="true" /> <DataExchFieldMapping ColumnNo="11" FieldID="31320" Optional="true" /> <DataExchFieldMapping ColumnNo="12" FieldID="31305" Optional="true" /> <DataExchFieldMapping ColumnNo="13" FieldID="5" Optional="true" TransformationRule="TRIMALL"> <TransformationRules> <Code>TRIMALL</Code> <Description>Removes all spaces</Description> <TransformationType>5</TransformationType> <FindValue>&amp;#032;</FindValue> <ReplaceValue /> <StartPosition>0</StartPosition> <Length>0</Length> <DataFormat /> <DataFormattingCulture /> <NextTransformationRule /> <TableID>0</TableID> <SourceFieldID>0</SourceFieldID> <TargetFieldID>0</TargetFieldID> <FieldLookupRule>0</FieldLookupRule> <Precision>0.00</Precision> <Direction /> <ExportFromDateType>0</ExportFromDateType> </TransformationRules> </DataExchFieldMapping> <DataExchFieldMapping ColumnNo="14" FieldID="31300" Optional="true" /> <DataExchFieldMapping ColumnNo="15" FieldID="6" Optional="true" /> <DataExchFieldMapping ColumnNo="16" FieldID="21" Optional="true" TransformationRule="INT_ROUNDTOINTGTONE"> <TransformationRules> <Code>INT_ROUNDTOINTGTONE</Code> <Description>Round to integer when the decimal is greater than 1.</Description> <TransformationType>11</TransformationType> <FindValue /> <ReplaceValue /> <StartPosition>0</StartPosition> <Length>0</Length> <DataFormat /> <DataFormattingCulture /> <NextTransformationRule /> <TableID>0</TableID> <SourceFieldID>0</SourceFieldID> <TargetFieldID>0</TargetFieldID> <FieldLookupRule>0</FieldLookupRule> <Precision>0.00</Precision> <Direction /> <ExportFromDateType>0</ExportFromDateType> </TransformationRules> </DataExchFieldMapping> <DataExchFieldMapping ColumnNo="17" FieldID="35" Optional="true" TransformationRule="INT_ROUNDTOINTGTONE"> <TransformationRules> <Code>INT_ROUNDTOINTGTONE</Code> <Description>Round to integer when the decimal is greater than 1.</Description> <TransformationType>11</TransformationType> <FindValue /> <ReplaceValue /> <StartPosition>0</StartPosition> <Length>0</Length> <DataFormat /> <DataFormattingCulture /> <NextTransformationRule /> <TableID>0</TableID> <SourceFieldID>0</SourceFieldID> <TargetFieldID>0</TargetFieldID> <FieldLookupRule>0</FieldLookupRule> <Precision>0.00</Precision> <Direction /> <ExportFromDateType>0</ExportFromDateType> </TransformationRules> </DataExchFieldMapping> <DataExchFieldMapping ColumnNo="18" FieldID="13" Optional="true" TransformationRule="INT_ROUNDTOINT"> <TransformationRules> <Code>INT_ROUNDTOINT</Code> <Description>Round to integer and take into account the rounding direction setting in intrastat report setup.</Description> <TransformationType>11</TransformationType> <FindValue /> <ReplaceValue /> <StartPosition>0</StartPosition> <Length>0</Length> <DataFormat /> <DataFormattingCulture /> <NextTransformationRule /> <TableID>0</TableID> <SourceFieldID>0</SourceFieldID> <TargetFieldID>0</TargetFieldID> <FieldLookupRule>0</FieldLookupRule> <Precision>0.00</Precision> <Direction /> <ExportFromDateType>0</ExportFromDateType> </TransformationRules> </DataExchFieldMapping> <DataExchFieldMapping ColumnNo="19" FieldID="31315" Optional="true" /> <DataExchFieldMapping ColumnNo="20" FieldID="31316" Optional="true" /> <DataExchFieldGrouping FieldID="3" /> <DataExchFieldGrouping FieldID="5" /> <DataExchFieldGrouping FieldID="7" /> <DataExchFieldGrouping FieldID="8" /> <DataExchFieldGrouping FieldID="9" /> <DataExchFieldGrouping FieldID="24" /> <DataExchFieldGrouping FieldID="29" /> <DataExchFieldGrouping FieldID="31320" /> </DataExchMapping> </DataExchLineDef> </DataExchDef> </root>',
-                            Locked = true; // will be replaced with file import when available
     begin
         IsHandled := true;
 
-        if not DataExchDef.Get('INTRA-2022-CZ') then begin
-            TempBlob.CreateOutStream(XMLOutStream);
-            XMLOutStream.WriteText(DataExchangeXMLTxt);
-            TempBlob.CreateInStream(XMLInStream);
-            Xmlport.Import(Xmlport::"Imp / Exp Data Exch Def & Map", XMLInStream);
-        end;
-#if not CLEAN22
-#pragma warning disable AL0432
-        if StatutoryReportingSetupCZL.Get() then begin
-            IntrastatReportSetup."No Item Charges in Int. CZ" := StatutoryReportingSetupCZL."No Item Charges in Intrastat";
-            IntrastatReportSetup."Transaction Type Mandatory CZ" := StatutoryReportingSetupCZL."Transaction Type Mandatory";
-            IntrastatReportSetup."Transaction Spec. Mandatory CZ" := StatutoryReportingSetupCZL."Transaction Spec. Mandatory";
-            IntrastatReportSetup."Transport Method Mandatory CZ" := StatutoryReportingSetupCZL."Transport Method Mandatory";
-            IntrastatReportSetup."Shipment Method Mandatory CZ" := StatutoryReportingSetupCZL."Shipment Method Mandatory";
-            IntrastatReportSetup."Intrastat Rounding Type CZ" := Enum::"Intrastat Rounding Type CZ".FromInteger(StatutoryReportingSetupCZL."Intrastat Rounding Type");
-        end;
-#pragma warning restore AL0432
-#endif
+        CreateDefaultDataExchangeDef();
 
         IntrastatReportSetup."Report Shipments" := true;
         IntrastatReportSetup."Report Receipts" := true;
         IntrastatReportSetup."Cust. VAT No. on File" := IntrastatReportSetup."Cust. VAT No. on File"::"VAT Reg. No.";
         IntrastatReportSetup."Vend. VAT No. on File" := IntrastatReportSetup."Vend. VAT No. on File"::"VAT Reg. No.";
         IntrastatReportSetup."Company VAT No. on File" := IntrastatReportSetup."Company VAT No. on File"::"VAT Reg. No. Without EU Country Code";
-        IntrastatReportSetup."Data Exch. Def. Code" := 'INTRA-2022-CZ';
-        IntrastatReportSetup."Data Exch. Def. Code - Receipt" := 'INTRA-2022-CZ';
-        IntrastatReportSetup."Data Exch. Def. Code - Shpt." := 'INTRA-2022-CZ';
+        IntrastatReportSetup."Data Exch. Def. Code" := DefaultDataExchDefCodeLbl;
+        IntrastatReportSetup."Data Exch. Def. Code - Receipt" := DefaultDataExchDefCodeLbl;
+        IntrastatReportSetup."Data Exch. Def. Code - Shpt." := DefaultDataExchDefCodeLbl;
         IntrastatReportSetup."Shipments Based On" := IntrastatReportSetup."Shipments Based On"::"Ship-to Country";
-        IntrastatReportSetup."VAT No. Based On" := IntrastatReportSetup."VAT No. Based On"::"Sell-to VAT";
+        IntrastatReportSetup."Sales VAT No. Based On" := IntrastatReportSetup."Sales VAT No. Based On"::Document;
         IntrastatReportSetup."Def. Private Person VAT No." := DefPrivatePersonVATNoLbl;
         IntrastatReportSetup."Def. 3-Party Trade VAT No." := Def3DPartyTradeVATNoLbl;
         IntrastatReportSetup."Def. VAT for Unknown State" := DefUnknowVATNoLbl;
         IntrastatReportSetup."Get Partner VAT For" := IntrastatReportSetup."Get Partner VAT For"::Shipment;
         IntrastatReportSetup."Def. Phys. Trans. - Returns CZ" := true;
         IntrastatReportSetup.Modify();
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::IntrastatReportManagement, 'OnBeforeCreateDefaultDataExchangeDef', '', false, false)]
+    local procedure CreateDefaultDataExchDefOnBeforeCreateDefaultDataExchangeDef(var IsHandled: Boolean)
+    var
+        IntrastatReportSetup: Record "Intrastat Report Setup";
+    begin
+        if IsHandled then
+            exit;
+        IsHandled := true;
+
+        CreateDefaultDataExchangeDef();
+
+        IntrastatReportSetup.Get();
+        IntrastatReportSetup."Data Exch. Def. Code" := DefaultDataExchDefCodeLbl;
+        IntrastatReportSetup.Modify();
+    end;
+
+    internal procedure CreateDefaultDataExchangeDef()
+    var
+        DataExchDef: Record "Data Exch. Def";
+        TempBlob: Codeunit "Temp Blob";
+        XMLOutStream: OutStream;
+        XMLInStream: InStream;
+        DataExchangeXMLTxt: Label '<?xml version="1.0" encoding="UTF-8" standalone="no"?><root><DataExchDef Code="INTRA-2022-CZ" Name="Intrastat Report 2022" Type="5" ReadingWritingXMLport="31300" ExternalDataHandlingCodeunit="4813" ColumnSeparator="2" FileType="1" ReadingWritingCodeunit="1276"><DataExchLineDef LineType="1" Code="DEFAULT" Name="DEFAULT" ColumnCount="20"><DataExchColumnDef ColumnNo="1" Name="Month of Declaration" Show="false" DataType="0" Length="2" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /><DataExchColumnDef ColumnNo="2" Name="Year of Declaration" Show="false" DataType="0" Length="4" TextPaddingRequired="false" PadCharacter="&amp;#032;" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /><DataExchColumnDef ColumnNo="3" Name="VAT Registration Number" Show="false" DataType="0" Length="10" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /><DataExchColumnDef ColumnNo="4" Name="Arrival/Dispatch" Show="false" DataType="0" Length="1" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /><DataExchColumnDef ColumnNo="5" Name="Partner ID" Show="false" DataType="0" Length="20" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /><DataExchColumnDef ColumnNo="6" Name="Country of Dispatch/Arrival" Show="false" DataType="0" Length="2" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /><DataExchColumnDef ColumnNo="7" Name="Region of Dispatch/Arrival" Show="false" DataType="0" Length="2" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /><DataExchColumnDef ColumnNo="8" Name="Country of Origin" Show="false" DataType="0" Length="2" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /><DataExchColumnDef ColumnNo="9" Name="Nature of Transaction" Show="false" DataType="0" Length="2" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /><DataExchColumnDef ColumnNo="10" Name="Nature of Transport" Show="false" DataType="0" Length="1" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /><DataExchColumnDef ColumnNo="11" Name="Delivery Terms" Show="false" DataType="0" Length="1" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /><DataExchColumnDef ColumnNo="12" Name="Code of Movement" Show="false" DataType="0" Length="2" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /><DataExchColumnDef ColumnNo="13" Name="Tariff No." Show="false" DataType="0" Length="8" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /><DataExchColumnDef ColumnNo="14" Name="Statistical Sign" Show="false" DataType="0" Length="2" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /><DataExchColumnDef ColumnNo="15" Name="Item Description" Show="false" DataType="0" Length="80" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /><DataExchColumnDef ColumnNo="16" Name="Net Mass" Show="false" DataType="2" DataFormattingCulture="cs-CZ" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /><DataExchColumnDef ColumnNo="17" Name="Quantity in Supplementary Units" Show="false" DataType="2" DataFormattingCulture="cs-CZ" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /><DataExchColumnDef ColumnNo="18" Name="Invoiced Value" Show="false" DataType="2" DataFormattingCulture="cs-CZ" Length="14" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /><DataExchColumnDef ColumnNo="19" Name="Internal Note 1" Show="false" DataType="0" Length="40" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /><DataExchColumnDef ColumnNo="20" Name="Internal Note 2" Show="false" DataType="0" Length="40" TextPaddingRequired="false" Justification="0" UseNodeNameAsValue="false" BlankZero="false" ExportIfNotBlank="false" /><DataExchMapping TableId="4812" Name="" KeyIndex="5" MappingCodeunit="1269"><DataExchFieldMapping ColumnNo="1" FieldID="41" Optional="true" TransformationRule="INT_STAT_MONTH"><TransformationRules><Code>INT_STAT_MONTH</Code><Description>Transforming intrastat Statistics Period to month.</Description><TransformationType>4</TransformationType><FindValue /><ReplaceValue /><StartPosition>3</StartPosition><Length>2</Length><DataFormat /><DataFormattingCulture /><NextTransformationRule /><TableID>0</TableID><SourceFieldID>0</SourceFieldID><TargetFieldID>0</TargetFieldID><FieldLookupRule>0</FieldLookupRule><Precision>0</Precision><Direction /><ExportFromDateType>0</ExportFromDateType></TransformationRules></DataExchFieldMapping><DataExchFieldMapping ColumnNo="2" FieldID="41" Optional="true" TransformationRule="INT_STAT_YEAR"><TransformationRules><Code>INT_STAT_YEAR</Code><Description>Transforming intrastat Statistics Period to year.</Description><TransformationType>11</TransformationType><FindValue /><ReplaceValue /><StartPosition>0</StartPosition><Length>0</Length><DataFormat /><DataFormattingCulture /><NextTransformationRule /><TableID>0</TableID><SourceFieldID>0</SourceFieldID><TargetFieldID>0</TargetFieldID><FieldLookupRule>0</FieldLookupRule><Precision>0</Precision><Direction /><ExportFromDateType>0</ExportFromDateType></TransformationRules></DataExchFieldMapping><DataExchFieldMapping ColumnNo="3" FieldID="31310" Optional="true" /><DataExchFieldMapping ColumnNo="4" FieldID="3" Optional="true" TransformationRule="INT_ARRIVALDISPATCH"><TransformationRules><Code>INT_ARRIVALDISPATCH</Code><Description>Transforming intrastat "Receipt" type to letter ''A'' and "Shipment" type to letter ''D''.</Description><TransformationType>11</TransformationType><FindValue /><ReplaceValue /><StartPosition>0</StartPosition><Length>0</Length><DataFormat /><DataFormattingCulture /><NextTransformationRule /><TableID>0</TableID><SourceFieldID>0</SourceFieldID><TargetFieldID>0</TargetFieldID><FieldLookupRule>0</FieldLookupRule><Precision>0</Precision><Direction /><ExportFromDateType>0</ExportFromDateType></TransformationRules></DataExchFieldMapping><DataExchFieldMapping ColumnNo="5" FieldID="29" Optional="true" /><DataExchFieldMapping ColumnNo="6" FieldID="7" Optional="true" TransformationRule="TRIM" /><DataExchFieldMapping ColumnNo="7" FieldID="26" Optional="true" /><DataExchFieldMapping ColumnNo="8" FieldID="24" Optional="true" /><DataExchFieldMapping ColumnNo="9" FieldID="8" Optional="true" /><DataExchFieldMapping ColumnNo="10" FieldID="9" Optional="true" /><DataExchFieldMapping ColumnNo="11" FieldID="31320" Optional="true" /><DataExchFieldMapping ColumnNo="12" FieldID="31305" Optional="true" /><DataExchFieldMapping ColumnNo="13" FieldID="5" Optional="true" TransformationRule="TRIMALL"><TransformationRules><Code>TRIMALL</Code><Description>Removes all spaces</Description><TransformationType>5</TransformationType><FindValue>&amp;#032;</FindValue><ReplaceValue /><StartPosition>0</StartPosition><Length>0</Length><DataFormat /><DataFormattingCulture /><NextTransformationRule /><TableID>0</TableID><SourceFieldID>0</SourceFieldID><TargetFieldID>0</TargetFieldID><FieldLookupRule>0</FieldLookupRule><Precision>0</Precision><Direction /><ExportFromDateType>0</ExportFromDateType></TransformationRules></DataExchFieldMapping><DataExchFieldMapping ColumnNo="14" FieldID="31300" Optional="true" /><DataExchFieldMapping ColumnNo="15" FieldID="6" Optional="true" TransformationRule="INT_ITEMDESC"><TransformationRules><Code>INT_ITEMDESC</Code><Description>Shorten the item description to the required length.</Description><TransformationType>4</TransformationType><FindValue /><ReplaceValue /><StartPosition>1</StartPosition><Length>80</Length><DataFormat /><DataFormattingCulture /><NextTransformationRule /><TableID>0</TableID><SourceFieldID>0</SourceFieldID><TargetFieldID>0</TargetFieldID><FieldLookupRule>0</FieldLookupRule><Precision>0</Precision><Direction /><ExportFromDateType>0</ExportFromDateType></TransformationRules></DataExchFieldMapping><DataExchFieldMapping ColumnNo="16" FieldID="21" Optional="true" TransformationRule="INT_ROUNDTOINTGTONE"><TransformationRules><Code>INT_ROUNDTOINTGTONE</Code><Description>Round to integer when the decimal is greater than 1.</Description><TransformationType>11</TransformationType><FindValue /><ReplaceValue /><StartPosition>0</StartPosition><Length>0</Length><DataFormat /><DataFormattingCulture /><NextTransformationRule /><TableID>0</TableID><SourceFieldID>0</SourceFieldID><TargetFieldID>0</TargetFieldID><FieldLookupRule>0</FieldLookupRule><Precision>0</Precision><Direction /><ExportFromDateType>0</ExportFromDateType></TransformationRules></DataExchFieldMapping><DataExchFieldMapping ColumnNo="17" FieldID="35" Optional="true" TransformationRule="INT_ROUNDTOINTGTONE"><TransformationRules><Code>INT_ROUNDTOINTGTONE</Code><Description>Round to integer when the decimal is greater than 1.</Description><TransformationType>11</TransformationType><FindValue /><ReplaceValue /><StartPosition>0</StartPosition><Length>0</Length><DataFormat /><DataFormattingCulture /><NextTransformationRule /><TableID>0</TableID><SourceFieldID>0</SourceFieldID><TargetFieldID>0</TargetFieldID><FieldLookupRule>0</FieldLookupRule><Precision>0</Precision><Direction /><ExportFromDateType>0</ExportFromDateType></TransformationRules></DataExchFieldMapping><DataExchFieldMapping ColumnNo="18" FieldID="13" Optional="true" TransformationRule="INT_ROUNDTOINT"><TransformationRules><Code>INT_ROUNDTOINT</Code><Description>Round to integer and take into account the rounding direction setting in intrastat report setup.</Description><TransformationType>11</TransformationType><FindValue /><ReplaceValue /><StartPosition>0</StartPosition><Length>0</Length><DataFormat /><DataFormattingCulture /><NextTransformationRule /><TableID>0</TableID><SourceFieldID>0</SourceFieldID><TargetFieldID>0</TargetFieldID><FieldLookupRule>0</FieldLookupRule><Precision>0</Precision><Direction /><ExportFromDateType>0</ExportFromDateType></TransformationRules></DataExchFieldMapping><DataExchFieldMapping ColumnNo="19" FieldID="31315" Optional="true" /><DataExchFieldMapping ColumnNo="20" FieldID="31316" Optional="true" /><DataExchFieldGrouping FieldID="3" /><DataExchFieldGrouping FieldID="5" /><DataExchFieldGrouping FieldID="7" /><DataExchFieldGrouping FieldID="8" /><DataExchFieldGrouping FieldID="9" /><DataExchFieldGrouping FieldID="24" /><DataExchFieldGrouping FieldID="29" /><DataExchFieldGrouping FieldID="31320" /></DataExchMapping></DataExchLineDef></DataExchDef></root>',
+                            Locked = true; // will be replaced with file import when available
+    begin
+        if DataExchDef.Get(DefaultDataExchDefCodeLbl) then
+            DataExchDef.Delete(true);
+
+        TempBlob.CreateOutStream(XMLOutStream);
+        XMLOutStream.WriteText(DataExchangeXMLTxt);
+        TempBlob.CreateInStream(XMLInStream);
+        Xmlport.Import(Xmlport::"Imp / Exp Data Exch Def & Map", XMLInStream);
     end;
     #endregion
 
@@ -255,17 +256,17 @@ codeunit 31302 IntrastatReportManagementCZ
         ItemJnlLine."Physical Transfer CZ" := PurchLine."Physical Transfer CZ";
     end;
 
-    [EventSubscriber(ObjectType::Table, Database::"Item Journal Line", 'OnAfterCopyItemJnlLineFromServHeader', '', false, false)]
-    local procedure CopyFieldsOnAfterCopyItemJnlLineFromServHeader(var ItemJnlLine: Record "Item Journal Line"; ServHeader: Record "Service Header")
+    [EventSubscriber(ObjectType::Table, Database::"Service Header", 'OnAfterCopyToItemJnlLine', '', false, false)]
+    local procedure CopyFieldsOnAfterCopyItemJnlLineFromServHeader(var ItemJournalLine: Record "Item Journal Line"; ServiceHeader: Record "Service Header")
     begin
-        ItemJnlLine."Physical Transfer CZ" := ServHeader."Physical Transfer CZ";
+        ItemJournalLine."Physical Transfer CZ" := ServiceHeader."Physical Transfer CZ";
     end;
 
-    [EventSubscriber(ObjectType::Table, Database::"Item Journal Line", 'OnAfterCopyItemJnlLineFromServLine', '', false, false)]
-    local procedure CopyFieldsOnAfterCopyItemJnlLineFromServLine(var ItemJnlLine: Record "Item Journal Line"; ServLine: Record "Service Line")
+    [EventSubscriber(ObjectType::Table, Database::"Service Line", 'OnAfterCopyToItemJnlLine', '', false, false)]
+    local procedure CopyFieldsOnAfterCopyItemJnlLineFromServLine(var ItemJournalLine: Record "Item Journal Line"; ServiceLine: Record "Service Line")
     begin
-        ItemJnlLine."Statistic Indication CZ" := ServLine."Statistic Indication CZ";
-        ItemJnlLine."Physical Transfer CZ" := ServLine."Physical Transfer CZ";
+        ItemJournalLine."Statistic Indication CZ" := ServiceLine."Statistic Indication CZ";
+        ItemJournalLine."Physical Transfer CZ" := ServiceLine."Physical Transfer CZ";
     end;
 
     [EventSubscriber(ObjectType::Codeunit, Codeunit::"TransferOrder-Post Receipt", 'OnBeforePostItemJournalLine', '', false, false)]
@@ -280,16 +281,16 @@ codeunit 31302 IntrastatReportManagementCZ
         ItemJournalLine."Statistic Indication CZ" := TransferLine."Statistic Indication CZ";
     end;
 
-    [EventSubscriber(ObjectType::Table, Database::"Item Journal Line", 'OnAfterCopyItemJnlLineFromServShptLine', '', false, false)]
-    local procedure CopyFieldsOnAfterCopyItemJnlLineFromServShptLine(var ItemJnlLine: Record "Item Journal Line"; ServShptLine: Record "Service Shipment Line")
+    [EventSubscriber(ObjectType::Table, Database::"Service Shipment Line", 'OnAfterCopyToItemJnlLine', '', false, false)]
+    local procedure CopyFieldsOnAfterCopyItemJnlLineFromServShptLine(var ItemJournalLine: Record "Item Journal Line"; ServiceShipmentLine: Record "Service Shipment Line")
     begin
-        ItemJnlLine."Statistic Indication CZ" := ServShptLine."Statistic Indication CZ";
+        ItemJournalLine."Statistic Indication CZ" := ServiceShipmentLine."Statistic Indication CZ";
     end;
 
-    [EventSubscriber(ObjectType::Table, Database::"Item Journal Line", 'OnAfterCopyItemJnlLineFromServShptLineUndo', '', false, false)]
-    local procedure CopyFieldsOnAfterCopyItemJnlLineFromServShptLineUndo(var ItemJnlLine: Record "Item Journal Line"; ServShptLine: Record "Service Shipment Line")
+    [EventSubscriber(ObjectType::Table, Database::"Service Shipment Line", 'OnAfterCopyToItemJnlLineUndo', '', false, false)]
+    local procedure CopyFieldsOnAfterCopyItemJnlLineFromServShptLineUndo(var ItemJournalLine: Record "Item Journal Line"; ServiceShipmentLine: Record "Service Shipment Line")
     begin
-        ItemJnlLine."Statistic Indication CZ" := ServShptLine."Statistic Indication CZ";
+        ItemJournalLine."Statistic Indication CZ" := ServiceShipmentLine."Statistic Indication CZ";
     end;
 
     [EventSubscriber(ObjectType::Codeunit, Codeunit::"Job Transfer Line", 'OnAfterFromPlanningSalesLineToJnlLine', '', false, false)]
@@ -377,84 +378,6 @@ codeunit 31302 IntrastatReportManagementCZ
             exit;
         StatisticIndicationCZ.SetRange("Tariff No.", Rec."No.");
         StatisticIndicationCZ.DeleteAll();
-    end;
-    #endregion
-
-    #region Intrastat Mandatory Fields
-    [EventSubscriber(ObjectType::Report, Report::"Sales Document - Test", 'OnAfterCheckSalesDoc', '', false, false)]
-    local procedure CheckIntrastatMandatoryFieldsOnAfterCheckSalesDocSalesDocumentTest(SalesHeader: Record "Sales Header"; var ErrorCounter: Integer; var ErrorText: array[99] of Text[250])
-    var
-        IntrastatReportSetup: Record "Intrastat Report Setup";
-        MustBeSpecifiedLbl: Label '%1 must be specified.', Comment = '%1 = FieldCaption';
-    begin
-        if not (SalesHeader.Ship or SalesHeader.Receive) then
-            exit;
-        if not IntrastatReportSetup.Get() then
-            exit;
-        if SalesHeader.IsIntrastatTransactionCZL() and SalesHeader.ShipOrReceiveInventoriableTypeItemsCZL() then begin
-            if IntrastatReportSetup."Transaction Type Mandatory CZ" then
-                if SalesHeader."Transaction Type" = '' then
-                    AddError(StrSubstNo(MustBeSpecifiedLbl, SalesHeader.FieldCaption("Transaction Type")), ErrorCounter, ErrorText);
-            if IntrastatReportSetup."Transaction Spec. Mandatory CZ" then
-                if SalesHeader."Transaction Specification" = '' then
-                    AddError(StrSubstNo(MustBeSpecifiedLbl, SalesHeader.FieldCaption("Transaction Specification")), ErrorCounter, ErrorText);
-            if IntrastatReportSetup."Transport Method Mandatory CZ" then
-                if SalesHeader."Transport Method" = '' then
-                    AddError(StrSubstNo(MustBeSpecifiedLbl, SalesHeader.FieldCaption("Transport Method")), ErrorCounter, ErrorText);
-            if IntrastatReportSetup."Shipment Method Mandatory CZ" then
-                if SalesHeader."Shipment Method Code" = '' then
-                    AddError(StrSubstNo(MustBeSpecifiedLbl, SalesHeader.FieldCaption("Shipment Method Code")), ErrorCounter, ErrorText);
-        end;
-    end;
-
-    [EventSubscriber(ObjectType::Report, Report::"Purchase Document - Test", 'OnAfterCheckPurchaseDoc', '', false, false)]
-    local procedure CheckIntrastatMandatoryFieldsOnAfterCheckPurchaseDocPurchaseDocumentTest(PurchaseHeader: Record "Purchase Header"; var ErrorCounter: Integer; var ErrorText: array[99] of Text[250])
-    var
-        IntrastatReportSetup: Record "Intrastat Report Setup";
-        MustBeSpecifiedLbl: Label '%1 must be specified.', Comment = '%1 = FieldCaption';
-    begin
-        if not (PurchaseHeader.Ship or PurchaseHeader.Receive) then
-            exit;
-        if not IntrastatReportSetup.Get() then
-            exit;
-        if PurchaseHeader.IsIntrastatTransactionCZL() and PurchaseHeader.ShipOrReceiveInventoriableTypeItemsCZL() then begin
-            if IntrastatReportSetup."Transaction Type Mandatory CZ" then
-                if PurchaseHeader."Transaction Type" = '' then
-                    AddError(StrSubstNo(MustBeSpecifiedLbl, PurchaseHeader.FieldCaption("Transaction Type")), ErrorCounter, ErrorText);
-            if IntrastatReportSetup."Transaction Spec. Mandatory CZ" then
-                if PurchaseHeader."Transaction Specification" = '' then
-                    AddError(StrSubstNo(MustBeSpecifiedLbl, PurchaseHeader.FieldCaption("Transaction Specification")), ErrorCounter, ErrorText);
-            if IntrastatReportSetup."Transport Method Mandatory CZ" then
-                if PurchaseHeader."Transport Method" = '' then
-                    AddError(StrSubstNo(MustBeSpecifiedLbl, PurchaseHeader.FieldCaption("Transport Method")), ErrorCounter, ErrorText);
-            if IntrastatReportSetup."Shipment Method Mandatory CZ" then
-                if PurchaseHeader."Shipment Method Code" = '' then
-                    AddError(StrSubstNo(MustBeSpecifiedLbl, PurchaseHeader.FieldCaption("Shipment Method Code")), ErrorCounter, ErrorText);
-        end;
-    end;
-
-    local procedure AddError(Text: Text[250]; var ErrorCounter: Integer; var ErrorText: array[99] of Text[250])
-    begin
-        ErrorCounter += 1;
-        ErrorText[ErrorCounter] := Text;
-    end;
-
-    [EventSubscriber(ObjectType::Table, Database::"Transfer Header", 'OnAfterCheckBeforePost', '', false, false)]
-    local procedure CheckIntrastatMandatoryFieldsOnAfterCheckBeforePost(var TransferHeader: Record "Transfer Header")
-    begin
-        TransferHeader.CheckIntrastatMandatoryFieldsCZ();
-    end;
-
-    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Sales-Post", 'OnAfterCheckSalesDoc', '', false, false)]
-    local procedure CheckIntrastatMandatoryFieldsOnAfterCheckSalesDocSalesPost(var SalesHeader: Record "Sales Header")
-    begin
-        SalesHeader.CheckIntrastatMandatoryFieldsCZ();
-    end;
-
-    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Purch.-Post", 'OnAfterCheckPurchDoc', '', false, false)]
-    local procedure CheckIntrastatMandatoryFieldsOnAfterCheckSalesDocPurchPost(var PurchHeader: Record "Purchase Header")
-    begin
-        PurchHeader.CheckIntrastatMandatoryFieldsCZ();
     end;
     #endregion
 
@@ -608,47 +531,6 @@ codeunit 31302 IntrastatReportManagementCZ
         end;
 
         if ItemLedgerEntry.GetDocumentCZ(TempSalesHeader) and (TempSalesHeader."Currency Code" <> '') then begin
-            RoundingDirection := IntrastatReportSetup.GetRoundingDirectionCZ();
-            IntrastatReportLine.Amount :=
-                Round(
-                    CalculateExchangeAmount(
-                        IntrastatReportLine.Amount,
-                        TempSalesHeader."Currency Factor",
-                        TempSalesHeader."VAT Currency Factor CZL"),
-                    1, RoundingDirection);
-            IntrastatReportLine."Indirect Cost" :=
-                Round(
-                    CalculateExchangeAmount(
-                        IntrastatReportLine."Indirect Cost",
-                        TempSalesHeader."Currency Factor",
-                        TempSalesHeader."VAT Currency Factor CZL"),
-                    1, RoundingDirection);
-        end;
-    end;
-
-    [EventSubscriber(ObjectType::Report, Report::"Intrastat Report Get Lines", 'OnBeforeInsertValueEntryLine', '', false, false)]
-    local procedure OnBeforeInsertValueEntryLine(var IntrastatReportLine: Record "Intrastat Report Line"; ItemLedgerEntry: Record "Item Ledger Entry"; var IsHandled: Boolean)
-    var
-        IntrastatReportSetup: Record "Intrastat Report Setup";
-        SpecificMovementCZ: Record "Specific Movement CZ";
-        TempSalesHeader: Record "Sales Header" temporary;
-        DocumentType: Enum "Item Ledger Document Type";
-        RoundingDirection: Text[1];
-    begin
-        IntrastatReportLine."Partner VAT ID" := '';
-        IntrastatReportLine.Type := ItemLedgerEntry.GetIntrastatReportLineType();
-        IntrastatReportLine.Amount := ItemLedgerEntry.GetIntrastatAmountSign() * IntrastatReportLine.Amount;
-        IntrastatReportLine.Validate(Quantity, ItemLedgerEntry.GetIntrastatQuantitySign() * IntrastatReportLine.Quantity);
-        IntrastatReportLine.Validate("Source Type");
-        if IntrastatReportLine."Specific Movement CZ" = '' then begin
-            SpecificMovementCZ.GetOrCreate(SpecificMovementCZ.GetStandardCode());
-            IntrastatReportLine."Specific Movement CZ" := SpecificMovementCZ.Code;
-        end;
-
-        DocumentType := GetDocumentType(IntrastatReportLine.Date, IntrastatReportLine."Document No.");
-        if GetDocument(DocumentType, IntrastatReportLine."Document No.", TempSalesHeader) and
-           (TempSalesHeader."Currency Code" <> '')
-        then begin
             RoundingDirection := IntrastatReportSetup.GetRoundingDirectionCZ();
             IntrastatReportLine.Amount :=
                 Round(
@@ -859,9 +741,12 @@ codeunit 31302 IntrastatReportManagementCZ
     [EventSubscriber(ObjectType::Report, Report::"Intrastat Report Get Lines", 'OnBeforeInsertJobLedgerLine', '', false, false)]
     local procedure OnBeforeValidateJobLedgerLineFields(var IntrastatReportLine: Record "Intrastat Report Line"; JobLedgerEntry: Record "Job Ledger Entry")
     var
+        IntrastatReportHeader: Record "Intrastat Report Header";
         SpecificMovementCZ: Record "Specific Movement CZ";
     begin
+        IntrastatReportHeader.Get(IntrastatReportLine."Intrastat No.");
         IntrastatReportLine."Partner VAT ID" := '';
+        IntrastatReportLine."Statistics Period" := IntrastatReportHeader."Statistics Period";
         IntrastatReportLine.Type := JobLedgerEntry.GetIntrastatReportLineType();
         IntrastatReportLine.Amount := JobLedgerEntry.GetIntrastatAmountSign() * IntrastatReportLine.Amount;
         IntrastatReportLine.Validate(Quantity, JobLedgerEntry.GetIntrastatQuantitySign() * IntrastatReportLine.Quantity);
@@ -878,6 +763,60 @@ codeunit 31302 IntrastatReportManagementCZ
         if (IntrastatCurrencyFactor <> 0) and (DocumentCurrencyFactor <> 0) then
             exit(Amount * DocumentCurrencyFactor / IntrastatCurrencyFactor);
         exit(Amount);
+    end;
+
+    [EventSubscriber(ObjectType::Report, Report::"Intrastat Report Get Lines", 'OnAfterGetIntrastatReportLineType', '', false, false)]
+    local procedure SetReceiptForCustom2OnAfterGetIntrastatReportLineType(FALedgerEntry: Record "FA Ledger Entry"; var IntrastatReportLineType: Enum "Intrastat Report Line Type")
+    begin
+        if (FALedgerEntry."FA Posting Type" = FALedgerEntry."FA Posting Type"::"Custom 2") and
+           (FALedgerEntry."Document Type" = FALedgerEntry."Document Type"::Invoice)
+        then
+            IntrastatReportLineType := Enum::"Intrastat Report Line Type"::Receipt;
+    end;
+
+    [EventSubscriber(ObjectType::Report, Report::"Intrastat Report Get Lines", 'OnBeforeFilterFALedgerEntry', '', false, false)]
+    local procedure FilterFALedgerEntry(IntrastatReportHeader: Record "Intrastat Report Header"; var FALedgerEntry: Record "FA Ledger Entry"; StartDate: Date; EndDate: Date; var IsHandled: Boolean)
+    begin
+        FALedgerEntry.SetRange("FA Posting Date", StartDate, EndDate);
+        FALedgerEntry.SetFilter("FA Posting Type",
+            '%1|%2|%3',
+            FALedgerEntry."FA Posting Type"::"Proceeds on Disposal",
+            FALedgerEntry."FA Posting Type"::"Acquisition Cost",
+            FALedgerEntry."FA Posting Type"::"Custom 2");
+        FALedgerEntry.SetFilter("Document Type", '%1|%2', FALedgerEntry."Document Type"::Invoice, FALedgerEntry."Document Type"::"Credit Memo");
+        FALedgerEntry.SetRange("FA Posting Category", FALedgerEntry."FA Posting Category"::" ");
+        IsHandled := true;
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::IntrastatReportManagement, 'OnAfterGetIntrastatBaseCountryCodeFromFAEntry', '', false, false)]
+    local procedure GetCountryForCustom2FAPostingType(var FALedgerEntry: Record "FA Ledger Entry"; var IntrastatReportSetup: Record "Intrastat Report Setup"; var CountryCode: Code[10]);
+    var
+        PurchInvHeader: Record "Purch. Inv. Header";
+        PurchCrMemoHdr: Record "Purch. Cr. Memo Hdr.";
+    begin
+        if FALedgerEntry."FA Posting Type" = FALedgerEntry."FA Posting Type"::"Custom 2" then
+            case FALedgerEntry."Document Type" of
+                FALedgerEntry."Document Type"::Invoice:
+                    if PurchInvHeader.Get(FALedgerEntry."Document No.") then
+                        case IntrastatReportSetup."Shipments Based On" of
+                            IntrastatReportSetup."Shipments Based On"::"Ship-to Country":
+                                CountryCode := PurchInvHeader."Buy-from Country/Region Code";
+                            IntrastatReportSetup."Shipments Based On"::"Sell-to Country":
+                                CountryCode := PurchInvHeader."Buy-from Country/Region Code";
+                            IntrastatReportSetup."Shipments Based On"::"Bill-to Country":
+                                CountryCode := PurchInvHeader."Pay-to Country/Region Code";
+                        end;
+                FALedgerEntry."Document Type"::"Credit Memo":
+                    if PurchCrMemoHdr.Get(FALedgerEntry."Document No.") then
+                        case IntrastatReportSetup."Shipments Based On" of
+                            IntrastatReportSetup."Shipments Based On"::"Ship-to Country":
+                                CountryCode := PurchCrMemoHdr."Buy-from Country/Region Code";
+                            IntrastatReportSetup."Shipments Based On"::"Sell-to Country":
+                                CountryCode := PurchCrMemoHdr."Buy-from Country/Region Code";
+                            IntrastatReportSetup."Shipments Based On"::"Bill-to Country":
+                                CountryCode := PurchCrMemoHdr."Pay-to Country/Region Code";
+                        end;
+            end;
     end;
     #endregion
 
@@ -927,11 +866,6 @@ codeunit 31302 IntrastatReportManagementCZ
     local procedure CopyPhysicalTransferOnBeforePurchCrMemoHdrModify(var PurchCrMemoHdr: Record "Purch. Cr. Memo Hdr."; PurchCrMemoHdrRec: Record "Purch. Cr. Memo Hdr.")
     begin
         PurchCrMemoHdr."Physical Transfer CZ" := PurchCrMemoHdrRec."Physical Transfer CZ";
-#if not CLEAN22
-#pragma warning disable AL0432
-        PurchCrMemoHdr."Physical Transfer CZL" := PurchCrMemoHdrRec."Physical Transfer CZ";
-#pragma warning restore AL0432
-#endif
         PurchCrMemoHdr."Transaction Type" :=
             GetDefaultTransactionType(
                 GetVendorBasedOnSetup(PurchCrMemoHdrRec."Buy-from Vendor No.", PurchCrMemoHdrRec."Pay-to Vendor No."),
@@ -942,11 +876,6 @@ codeunit 31302 IntrastatReportManagementCZ
     local procedure CopyPhysicalTransferOnBeforeReturnReceiptHeaderModify(var ReturnReceiptHeader: Record "Return Receipt Header"; ReturnReceiptHeaderRec: Record "Return Receipt Header")
     begin
         ReturnReceiptHeader."Physical Transfer CZ" := ReturnReceiptHeaderRec."Physical Transfer CZ";
-#if not CLEAN22
-#pragma warning disable AL0432
-        ReturnReceiptHeader."Physical Transfer CZL" := ReturnReceiptHeaderRec."Physical Transfer CZ";
-#pragma warning restore AL0432
-#endif
         ReturnReceiptHeader."Transaction Type" :=
             GetDefaultTransactionType(
                 GetCustomerBasedOnSetup(ReturnReceiptHeaderRec."Sell-to Customer No.", ReturnReceiptHeaderRec."Bill-to Customer No."),
@@ -957,11 +886,6 @@ codeunit 31302 IntrastatReportManagementCZ
     local procedure CopyPhysicalTransferOnBeforeSalesCrMemoHeaderModify(var SalesCrMemoHeader: Record "Sales Cr.Memo Header"; FromSalesCrMemoHeader: Record "Sales Cr.Memo Header")
     begin
         SalesCrMemoHeader."Physical Transfer CZ" := FromSalesCrMemoHeader."Physical Transfer CZ";
-#if not CLEAN22
-#pragma warning disable AL0432
-        SalesCrMemoHeader."Physical Transfer CZL" := FromSalesCrMemoHeader."Physical Transfer CZ";
-#pragma warning restore AL0432
-#endif
         SalesCrMemoHeader."Transaction Type" :=
             GetDefaultTransactionType(
                 GetCustomerBasedOnSetup(FromSalesCrMemoHeader."Sell-to Customer No.", FromSalesCrMemoHeader."Bill-to Customer No."),
@@ -972,11 +896,6 @@ codeunit 31302 IntrastatReportManagementCZ
     local procedure CopyPhysicalTransferOnBeforeReturnShipmentHeaderModify(var ReturnShipmentHeader: Record "Return Shipment Header"; ReturnShipmentHeaderRec: Record "Return Shipment Header")
     begin
         ReturnShipmentHeader."Physical Transfer CZ" := ReturnShipmentHeaderRec."Physical Transfer CZ";
-#if not CLEAN22
-#pragma warning disable AL0432
-        ReturnShipmentHeader."Physical Transfer CZL" := ReturnShipmentHeaderRec."Physical Transfer CZ";
-#pragma warning restore AL0432
-#endif
         ReturnShipmentHeader."Transaction Type" :=
             GetDefaultTransactionType(
                 GetVendorBasedOnSetup(ReturnShipmentHeaderRec."Buy-from Vendor No.", ReturnShipmentHeaderRec."Pay-to Vendor No."),
@@ -1011,11 +930,6 @@ codeunit 31302 IntrastatReportManagementCZ
     local procedure CopyPhysicalTransferOnRunOnBeforeItemLedgEntryModify(var ItemLedgerEntry: Record "Item Ledger Entry"; FromItemLedgerEntry: Record "Item Ledger Entry")
     begin
         ItemLedgerEntry."Physical Transfer CZ" := FromItemLedgerEntry."Physical Transfer CZ";
-#if not CLEAN22
-#pragma warning disable AL0432
-        ItemLedgerEntry."Physical Transfer CZL" := FromItemLedgerEntry."Physical Transfer CZ";
-#pragma warning restore AL0432
-#endif
         ItemLedgerEntry."Transaction Type" := FromItemLedgerEntry."Transaction Type";
     end;
 
@@ -1030,11 +944,6 @@ codeunit 31302 IntrastatReportManagementCZ
         if ItemLedgerEntry.FindSet() then
             repeat
                 ItemLedgerEntry."Physical Transfer CZ" := PhysicalTransfer;
-#if not CLEAN22
-#pragma warning disable AL0432
-                ItemLedgerEntry."Physical Transfer CZL" := PhysicalTransfer;
-#pragma warning restore AL0432
-#endif
                 case ItemLedgerEntry."Source Type" of
                     ItemLedgerEntry."Source Type"::Customer:
                         Partner := GetCustomerBasedOnSetup(ItemLedgerEntry."Source No.", ItemLedgerEntry."Invoice-to Source No. CZA");
@@ -1051,6 +960,50 @@ codeunit 31302 IntrastatReportManagementCZ
     #endregion
 
     #region Intrastat Exclude
+    [EventSubscriber(ObjectType::Table, Database::"Purchase Header", 'OnBeforeCheckIsIntrastatTransaction', '', false, false)]
+    local procedure CheckIntrastatExcludeOnBeforeCheckIsIntrastatTransactionPurchase(PurchaseHeader: Record "Purchase Header"; var Result: Boolean; var IsHandled: Boolean)
+    begin
+        if IsHandled then
+            exit;
+        if PurchaseHeader."Intrastat Exclude CZ" or PurchaseHeader."EU 3-Party Intermed. Role CZL" then begin
+            Result := false;
+            IsHandled := true;
+        end;
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"Sales Header", 'OnBeforeCheckIsIntrastatTransaction', '', false, false)]
+    local procedure CheckIntrastatExcludeOnBeforeCheckIsIntrastatTransactionSales(SalesHeader: Record "Sales Header"; var Result: Boolean; var IsHandled: Boolean)
+    begin
+        if IsHandled then
+            exit;
+        if SalesHeader."Intrastat Exclude CZ" or SalesHeader."EU 3-Party Intermed. Role CZL" then begin
+            Result := false;
+            IsHandled := true;
+        end;
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"Service Header", 'OnBeforeCheckIsIntrastatTransaction', '', false, false)]
+    local procedure CheckIntrastatExcludeOnBeforeCheckIsIntrastatTransactionService(ServiceHeader: Record "Service Header"; var Result: Boolean; var IsHandled: Boolean)
+    begin
+        if IsHandled then
+            exit;
+        if ServiceHeader."Intrastat Exclude CZ" or ServiceHeader."EU 3-Party Intermed. Role CZL" then begin
+            Result := false;
+            IsHandled := true;
+        end;
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"Transfer Header", 'OnBeforeCheckIsIntrastatTransaction', '', false, false)]
+    local procedure CheckIntrastatExcludeOnBeforeCheckIsIntrastatTransactionTransfer(TransferHeader: Record "Transfer Header"; var Result: Boolean; var IsHandled: Boolean)
+    begin
+        if IsHandled then
+            exit;
+        if TransferHeader."Intrastat Exclude CZ" then begin
+            Result := false;
+            IsHandled := true;
+        end;
+    end;
+#if not CLEAN26
     [EventSubscriber(ObjectType::Table, Database::"Purchase Header", 'OnBeforeUpdateGlobalIsIntrastatTransaction', '', false, false)]
     local procedure CheckIntrastatExcludeOnBeforeUpdateGlobalIsIntrastatTransactionPurchase(PurchaseHeader: Record "Purchase Header"; var Result: Boolean; var IsHandled: Boolean)
     begin
@@ -1105,30 +1058,67 @@ codeunit 31302 IntrastatReportManagementCZ
             IsHandled := true;
         end;
     end;
+#endif
+    #endregion
+
+    #region EU 3-Party Trade functions
+    [EventSubscriber(ObjectType::Table, Database::"Sales Header", 'OnBeforeCheckIsIntrastatTransaction', '', false, false)]
+    local procedure OnBeforeCheckIsSalesIntrastatTransaction(SalesHeader: Record "Sales Header"; var Result: Boolean; var IsHandled: Boolean)
+    begin
+        if SalesHeader."EU 3-Party Intermed. Role CZL" then begin
+            Result := false;
+            IsHandled := true;
+        end;
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"Service Header", 'OnBeforeCheckIsIntrastatTransaction', '', false, false)]
+    local procedure OnBeforeCheckIsServiceIntrastatTransaction(ServiceHeader: Record "Service Header"; var Result: Boolean; var IsHandled: Boolean)
+    begin
+        if ServiceHeader."EU 3-Party Intermed. Role CZL" then begin
+            Result := false;
+            IsHandled := true;
+        end;
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"Purchase Header", 'OnBeforeCheckIsIntrastatTransaction', '', false, false)]
+    local procedure OnBeforeCheckIsPurchaseIntrastatTransaction(PurchaseHeader: Record "Purchase Header"; var Result: Boolean; var IsHandled: Boolean)
+    begin
+        if PurchaseHeader."EU 3-Party Intermed. Role CZL" then begin
+            Result := false;
+            IsHandled := true;
+        end;
+    end;
     #endregion
 
     #region Helper functions
     internal procedure GetCustomerBasedOnSetup(SellTo: Code[20]; BillTo: Code[20]) Customer: Record Customer
-    begin
-        Customer.Get(GetPartnerNoBasedOnSetup(SellTo, BillTo));
-    end;
-
-    internal procedure GetVendorBasedOnSetup(SellTo: Code[20]; BillTo: Code[20]) Vendor: Record Vendor
-    begin
-        Vendor.Get(GetPartnerNoBasedOnSetup(SellTo, BillTo));
-    end;
-
-    internal procedure GetPartnerNoBasedOnSetup(SellTo: Code[20]; BillTo: Code[20]) PartnerNo: Code[20]
     var
         IntrastatReportSetup: Record "Intrastat Report Setup";
+        PartnerNo: Code[20];
     begin
         IntrastatReportSetup.Get();
-        case IntrastatReportSetup."VAT No. Based On" of
-            IntrastatReportSetup."VAT No. Based On"::"Sell-to VAT":
+        case IntrastatReportSetup."Sales Intrastat Info Based On" of
+            IntrastatReportSetup."Sales Intrastat Info Based On"::"Sell-to Customer":
                 PartnerNo := SellTo;
-            IntrastatReportSetup."VAT No. Based On"::"Bill-to VAT":
+            IntrastatReportSetup."Sales Intrastat Info Based On"::"Bill-to Customer":
                 PartnerNo := BillTo;
         end;
+        Customer.Get(PartnerNo);
+    end;
+
+    internal procedure GetVendorBasedOnSetup(BuyFrom: Code[20]; PayTo: Code[20]) Vendor: Record Vendor
+    var
+        IntrastatReportSetup: Record "Intrastat Report Setup";
+        PartnerNo: Code[20];
+    begin
+        IntrastatReportSetup.Get();
+        case IntrastatReportSetup."Purch. Intrastat Info Based On" of
+            IntrastatReportSetup."Purch. Intrastat Info Based On"::"Buy-from Vendor":
+                PartnerNo := BuyFrom;
+            IntrastatReportSetup."Purch. Intrastat Info Based On"::"Pay-to Vendor":
+                PartnerNo := PayTo;
+        end;
+        Vendor.Get(PartnerNo);
     end;
 
     internal procedure GetDefaultTransactionType(ServiceHeader: Record "Service Header"): Code[10]
@@ -1187,6 +1177,7 @@ codeunit 31302 IntrastatReportManagementCZ
     var
         GuidedExperience: Codeunit "Guided Experience";
         ManualSetupCategory: Enum "Manual Setup Category";
+        DefaultDataExchDefCodeLbl: Label 'INTRA-2022-CZ', Locked = true;
         DefPrivatePersonVATNoLbl: Label 'QV123', Locked = true;
         Def3DPartyTradeVATNoLbl: Label 'QV123', Locked = true;
         DefUnknowVATNoLbl: Label 'QV123', Locked = true;

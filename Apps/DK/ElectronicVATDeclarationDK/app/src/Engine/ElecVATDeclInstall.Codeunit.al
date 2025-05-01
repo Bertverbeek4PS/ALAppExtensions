@@ -3,6 +3,7 @@ namespace Microsoft.Finance.VAT.Reporting;
 using Microsoft.Foundation.Company;
 using System.Environment;
 using System.Privacy;
+using System.Upgrade;
 
 codeunit 13611 "Elec. VAT Decl. Install"
 {
@@ -35,6 +36,8 @@ codeunit 13611 "Elec. VAT Decl. Install"
         InsertVATReportsConfiguration();
         UpdateVATReportSetup();
         InsertEmptySetup();
+
+        SetAllUpgradeTags();
     end;
 
     local procedure ApplyEvaluationClassificationsForPrivacy()
@@ -68,10 +71,12 @@ codeunit 13611 "Elec. VAT Decl. Install"
     var
         VATReportSetup: Record "VAT Report Setup";
     begin
-        VATReportSetup.Get();
+        if not VATReportSetup.Get() then
+            VATReportSetup.Insert();
+
         VATReportSetup."Report Version" := GetVATReportVersion();
         VATReportSetup.Validate("Manual Receive Period CU ID", Codeunit::"Elec. VAT Decl. Get Periods");
-        VATReportSetup.Modify();
+        if VATReportSetup.Modify() then;
     end;
 
     local procedure GetVATReportVersion(): Code[10]
@@ -85,5 +90,17 @@ codeunit 13611 "Elec. VAT Decl. Install"
     begin
         if not ElecVATDeclSetup.Get() then
             ElecVATDeclSetup.Insert(true);
+
+        ElecVATDeclSetup."Use Azure Key Vault" := true;
+        if ElecVATDeclSetup.Modify(true) then;
+    end;
+
+    local procedure SetAllUpgradeTags()
+    var
+        UpgradeTag: Codeunit "Upgrade Tag";
+        ElecVATDeclUpgrade: Codeunit "Elec. VAT Decl. Upgrade";
+    begin
+        if not UpgradeTag.HasUpgradeTag(ElecVATDeclUpgrade.GetElecVATDeclAKVSetupUpgradeTag()) then
+            UpgradeTag.SetUpgradeTag(ElecVATDeclUpgrade.GetElecVATDeclAKVSetupUpgradeTag());
     end;
 }

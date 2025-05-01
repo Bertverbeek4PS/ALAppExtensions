@@ -70,7 +70,7 @@ table 30106 "Shpfy Customer Address"
             Caption = 'Country/Region Name';
             DataClassification = CustomerContent;
         }
-        field(12; "Province Code"; Code[2])
+        field(12; "Province Code"; Code[10])
         {
             Caption = 'Province Code';
             DataClassification = CustomerContent;
@@ -89,15 +89,6 @@ table 30106 "Shpfy Customer Address"
         {
             Caption = 'Default';
             DataClassification = CustomerContent;
-        }
-        field(101; "Ship-To Address SystemId"; Guid)
-        {
-            Access = Internal;
-            Caption = 'Ship-To Address SystemId';
-            DataClassification = SystemMetadata;
-            ObsoleteReason = 'Not used.';
-            ObsoleteTag = '24.0';
-            ObsoleteState = Removed;
         }
         field(102; CustomerSystemId; Guid)
         {

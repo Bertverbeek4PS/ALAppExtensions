@@ -2,6 +2,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License. See License.txt in the project root for license information.
 // ------------------------------------------------------------------------------------------------
+#pragma warning disable AA0247
 
 codeunit 10538 "MTD OAuth 2.0 Mgt"
 {
@@ -12,6 +13,8 @@ codeunit 10538 "MTD OAuth 2.0 Mgt"
 
     var
         OAuth20Mgt: Codeunit "OAuth 2.0 Mgt.";
+        FeatureTelemetry: Codeunit "Feature Telemetry";
+        EnvironmentInformation: Codeunit "Environment Information";
         OAuthPRODSetupLbl: Label 'HMRC VAT', Locked = true;
         OAuthSandboxSetupLbl: Label 'HMRC VAT Sandbox', Locked = true;
         ServiceURLPRODTxt: Label 'https://api.service.hmrc.gov.uk', Locked = true;
@@ -56,6 +59,24 @@ codeunit 10538 "MTD OAuth 2.0 Mgt"
         VendorProductNameTxt: Label 'GOV-VENDOR-PRODUCT-NAME', Locked = true;
         VendorPublicIpTxt: Label 'GOV-VENDOR-PUBLIC-IP', Locked = true;
         VendorVersionTxt: Label 'GOV-VENDOR-VERSION', Locked = true;
+        AzFunctionClientIdKeyTok: Label 'AppNetProxyFnClientID', Locked = true;
+        AzFuncScopeKeyTok: Label 'AppNetProxyFnScope', Locked = true;
+        AzFuncAuthURLKeyTok: Label 'AppNetProxyFnAuthUrl', Locked = true;
+        AzFuncCertificateNameTok: Label 'ElectronicInvoicingCertificateName', Locked = true;
+        AzFuncEndpointTextKeyTok: Label 'ClientPublicIP-Endpoint', Locked = true;
+        CannotGetAuthorityURLFromKeyVaultErr: Label 'Cannot get Authority URL from Azure Key Vault using key %1', Locked = true;
+        CannotGetClientIdFromKeyVaultErr: Label 'Cannot get Client ID from Azure Key Vault using key %1', Locked = true;
+        CannotGetCertFromKeyVaultErr: Label 'Cannot get certificate from Azure Key Vault using key %1', Locked = true;
+        CannotGetScopeFromKeyVaultErr: Label 'Cannot get Scope from Azure Key Vault using key %1', Locked = true;
+        CannotGetEndpointTextFromKeyVaultErr: Label 'Cannot get Endpoint from Azure Key Vault using key %1 ', Locked = true;
+        GetPublicIPAddressRequestFailedErr: Label 'Getting server public IP address from Azure Function failed.', Locked = true;
+        EmptyPublicIPAddressAzFuncErr: Label 'Azure Function returned empty server public IP address.', Locked = true;
+        NonEmptyPublicIPAddressAzFuncTxt: Label 'Non-empty server public IP address was returned by Azure Function', Locked = true;
+        EmptyPublicIPAddressErr: Label 'Tenant settings returned empty server public IP address.', Locked = true;
+        NonEmptyPublicIPAddressTxt: Label 'Non-empty server public IP address was returned by tenant settings', Locked = true;
+        IPAddressNotMatchPatternErr: Label 'IP address from tenant settings does not match validation pattern %1. ', Locked = true;
+        IPv4LoopbackIPAddressTxt: Label '127.0.0.1', Locked = true;
+        IPv6LoopbackIPAddressTxt: Label '::1', Locked = true;
 
     internal procedure GetOAuthPRODSetupCode() Result: Code[20]
     begin
@@ -172,12 +193,12 @@ codeunit 10538 "MTD OAuth 2.0 Mgt"
         CheckOAuthConsistencySetup(OAuth20Setup);
         UpdateClientTokens(OAuth20Setup);
         if not EnvironmentInfo.IsSaaS() then begin
-            Hyperlink(OAuth20Mgt.GetAuthorizationURL(OAuth20Setup, GetToken(OAuth20Setup."Client ID", OAuth20Setup.GetTokenDataScope())));
+            Hyperlink(OAuth20Mgt.GetAuthorizationURLAsSecretText(OAuth20Setup, GetToken(OAuth20Setup."Client ID", OAuth20Setup.GetTokenDataScope()).Unwrap()).Unwrap());
             exit;
         end;
 
         state := Format(CreateGuid(), 0, 4);
-        url := OAuth20Mgt.GetAuthorizationURL(OAuth20Setup, GetToken(OAuth20Setup."Client ID", OAuth20Setup.GetTokenDataScope())) + '&state=' + state;
+        url := OAuth20Mgt.GetAuthorizationURLAsSecretText(OAuth20Setup, GetToken(OAuth20Setup."Client ID", OAuth20Setup.GetTokenDataScope()).Unwrap() + '&state=' + state).Unwrap();
         OAuth2ControlAddIn.SetOAuth2Properties(url, state);
         OAuth2ControlAddIn.RunModal();
 
@@ -193,14 +214,14 @@ codeunit 10538 "MTD OAuth 2.0 Mgt"
         end;
     end;
 
-    [NonDebuggable]
     [EventSubscriber(ObjectType::Table, Database::"OAuth 2.0 Setup", 'OnBeforeRequestAccessToken', '', true, true)]
+    [NonDebuggable]
     local procedure OnBeforeRequestAccessToken(var OAuth20Setup: Record "OAuth 2.0 Setup"; AuthorizationCode: Text; var Result: Boolean; var MessageText: Text; var Processed: Boolean)
     var
         MTDSessionFraudPrevHdr: Record "MTD Session Fraud Prev. Hdr";
         RequestJSON: Text;
-        AccessToken: Text;
-        RefreshToken: Text;
+        AccessToken: SecretText;
+        RefreshToken: SecretText;
         TokenDataScope: DataScope;
     begin
         if not IsMTDOAuthSetup(OAuth20Setup) or Processed then
@@ -216,7 +237,7 @@ codeunit 10538 "MTD OAuth 2.0 Mgt"
         Result :=
             OAuth20Mgt.RequestAccessTokenWithGivenRequestJson(
                 OAuth20Setup, RequestJSON, MessageText, AuthorizationCode,
-                GetToken(OAuth20Setup."Client ID", TokenDataScope),
+                GetToken(OAuth20Setup."Client ID", TokenDataScope).Unwrap(),
                 GetToken(OAuth20Setup."Client Secret", TokenDataScope),
                 AccessToken, RefreshToken);
 
@@ -242,8 +263,8 @@ codeunit 10538 "MTD OAuth 2.0 Mgt"
     local procedure OnBeforeRefreshAccessToken(var OAuth20Setup: Record "OAuth 2.0 Setup"; var Result: Boolean; var MessageText: Text; var Processed: Boolean)
     var
         RequestJSON: Text;
-        AccessToken: Text;
-        RefreshToken: Text;
+        AccessToken: SecretText;
+        RefreshToken: SecretText;
         TokenDataScope: DataScope;
     begin
         if not IsMTDOAuthSetup(OAuth20Setup) or Processed then
@@ -259,7 +280,7 @@ codeunit 10538 "MTD OAuth 2.0 Mgt"
         Result :=
             OAuth20Mgt.RefreshAccessTokenWithGivenRequestJson(
                 OAuth20Setup, RequestJSON, MessageText,
-                GetToken(OAuth20Setup."Client ID", TokenDataScope),
+                GetToken(OAuth20Setup."Client ID", TokenDataScope).Unwrap(),
                 GetToken(OAuth20Setup."Client Secret", TokenDataScope),
                 AccessToken, RefreshToken);
 
@@ -268,7 +289,7 @@ codeunit 10538 "MTD OAuth 2.0 Mgt"
     end;
 
     [NonDebuggable]
-    local procedure SaveTokens(var OAuth20Setup: Record "OAuth 2.0 Setup"; TokenDataScope: DataScope; AccessToken: Text; RefreshToken: Text)
+    local procedure SaveTokens(var OAuth20Setup: Record "OAuth 2.0 Setup"; TokenDataScope: DataScope; AccessToken: SecretText; RefreshToken: SecretText)
     var
         TypeHelper: Codeunit "Type Helper";
         NewAccessTokenDateTime: DateTime;
@@ -309,7 +330,7 @@ codeunit 10538 "MTD OAuth 2.0 Mgt"
         EnvironmentInformation: Codeunit "Environment Information";
         AzureClientIDTxt: Text;
         AzureClientSecretTxt: Text;
-        KeyValue: Text;
+        KeyValue: SecretText;
         IsModify: Boolean;
         TokenDataScope: DataScope;
     begin
@@ -325,19 +346,19 @@ codeunit 10538 "MTD OAuth 2.0 Mgt"
         end;
         TokenDataScope := OAuth20Setup.GetTokenDataScope();
         if AzureKeyVault.GetAzureKeyVaultSecret(AzureClientIDTxt, KeyValue) then
-            if KeyValue <> '' then
-                if KeyValue <> GetToken(OAuth20Setup."Client ID", TokenDataScope) then
+            if not KeyValue.IsEmpty() then
+                if KeyValue.Unwrap() <> GetToken(OAuth20Setup."Client ID", TokenDataScope).Unwrap() then
                     IsModify := SetToken(OAuth20Setup."Client ID", KeyValue, TokenDataScope);
         if AzureKeyVault.GetAzureKeyVaultSecret(AzureClientSecretTxt, KeyValue) then
-            if KeyValue <> '' then
-                if KeyValue <> GetToken(OAuth20Setup."Client Secret", TokenDataScope) then
+            if not KeyValue.IsEmpty() then
+                if KeyValue.Unwrap() <> GetToken(OAuth20Setup."Client Secret", TokenDataScope).Unwrap() then
                     IsModify := SetToken(OAuth20Setup."Client Secret", KeyValue, TokenDataScope);
         if IsModify then
             OAuth20Setup.Modify();
     end;
 
     [NonDebuggable]
-    internal procedure SetToken(var TokenKey: Guid; TokenValue: Text; TokenDataScope: DataScope) NewToken: Boolean
+    internal procedure SetToken(var TokenKey: Guid; TokenValue: SecretText; TokenDataScope: DataScope) NewToken: Boolean
     begin
         if IsNullGuid(TokenKey) then
             NewToken := true;
@@ -350,11 +371,10 @@ codeunit 10538 "MTD OAuth 2.0 Mgt"
             IsolatedStorage.Set(TokenKey, TokenValue, TokenDataScope);
     end;
 
-    [NonDebuggable]
-    local procedure GetToken(TokenKey: Guid; TokenDataScope: DataScope) TokenValue: Text
+    local procedure GetToken(TokenKey: Guid; TokenDataScope: DataScope) TokenValue: SecretText
     begin
         if not HasToken(TokenKey, TokenDataScope) then
-            exit('');
+            exit(TokenValue);
 
         IsolatedStorage.Get(TokenKey, TokenDataScope, TokenValue);
     end;
@@ -406,10 +426,13 @@ codeunit 10538 "MTD OAuth 2.0 Mgt"
 
     local procedure LogFraudPreventionHeadersValidity(RequestJSON: Text)
     var
-        FeatureTelemetry: Codeunit "Feature Telemetry";
+        VATReportSetup: Record "VAT Report Setup";
+        CustomDimensions: Dictionary of [Text, Text];
         JsonObject: JsonObject;
         HeaderJsonToken: JsonToken;
         ErrorText: Text;
+        ClientIPAddrErrorText: Text;
+        VendorIPAddrErrorText: Text;
     begin
         if RequestJSON = '' then begin
             FeatureTelemetry.LogError('0000LJE', HMRCFraudPreventHeadersTok, '', JsonTextBlankErr);
@@ -428,11 +451,20 @@ codeunit 10538 "MTD OAuth 2.0 Mgt"
 
         JsonObject := HeaderJsonToken.AsObject();
 
+        ClientIPAddrErrorText := CheckJsonTokenValidity(JsonObject, ClientPublicIpTxt, '[0-9]{1,3}(\.[0-9]{1,3}){3}|([0-9A-Fa-f]{0,4}:){2,7}([0-9A-Fa-f]{1,4})');   // IPv4 or IPv6
+        VendorIPAddrErrorText := CheckJsonTokenValidity(JsonObject, VendorPublicIpTxt, '[0-9]{1,3}(\.[0-9]{1,3}){3}|([0-9A-Fa-f]{0,4}:){2,7}([0-9A-Fa-f]{1,4})');   // IPv4 or IPv6
+        ErrorText += ClientIPAddrErrorText;
+        ErrorText += VendorIPAddrErrorText;
+        if (ClientIPAddrErrorText <> '') or (VendorIPAddrErrorText <> '') then
+            if VATReportSetup.Get() then
+                CustomDimensions.Add('PublicIPServiceURL', VATReportSetup."MTD FP Public IP Service URL");
+        CustomDimensions.Add('IsClientIPAddressLoopback', Format(IsLoopbackIPAddress(GetJsonTokenValue(JsonObject, ClientPublicIpTxt))));
+        CustomDimensions.Add('IsVendorIPAddressLoopback', Format(IsLoopbackIPAddress(GetJsonTokenValue(JsonObject, VendorPublicIpTxt))));
+
         ErrorText += CheckJsonTokenValidity(JsonObject, ClientBrowserDoNotTrackTxt, 'true|false');              // true or false
         ErrorText += CheckJsonTokenValidity(JsonObject, ClientBrowserJsUserAgentTxt, '\w+');                    // any letter, digit, or underscore
         ErrorText += CheckJsonTokenValidity(JsonObject, ClientConnectionMethodTxt, 'WEB_APP_VIA_SERVER');       // WEB_APP_VIA_SERVER
         ErrorText += CheckJsonTokenValidity(JsonObject, ClientDeviceIdTxt, '\w+');                              // any letter, digit, or underscore
-        ErrorText += CheckJsonTokenValidity(JsonObject, ClientPublicIpTxt, '[0-9]{1,3}(\.[0-9]{1,3}){3}|([0-9A-Fa-f]{0,4}:){2,7}([0-9A-Fa-f]{1,4})');   // IPv4 or IPv6
         ErrorText += CheckJsonTokenValidity(JsonObject, ClientPublicIpTimestampTxt, '\d+[:\.-]\d+[:\.-]\d+');   // for example 13:00:00
         ErrorText += CheckJsonTokenValidity(JsonObject, ClientScreensTxt, '^(?=.*width)(?=.*height).*$');       // width and height must be present in any order
         ErrorText += CheckJsonTokenValidity(JsonObject, ClientTimezoneTxt, '[-+]\d{1,2}');                      // for example +02
@@ -441,13 +473,114 @@ codeunit 10538 "MTD OAuth 2.0 Mgt"
         ErrorText += CheckJsonTokenValidity(JsonObject, VendorForwardedTxt, '[0-9]{1,3}(\.[0-9]{1,3}){3}|([0-9A-Fa-f]{0,4}:){2,7}([0-9A-Fa-f]{1,4})');  // IPv4 or IPv6
         ErrorText += CheckJsonTokenValidity(JsonObject, VendorLicenseIdsTxt, 'Business.*Central.*\w+');         // Business Central and any letter, digit, or underscore
         ErrorText += CheckJsonTokenValidity(JsonObject, VendorProductNameTxt, 'Business.*Central');             // Business Central
-        ErrorText += CheckJsonTokenValidity(JsonObject, VendorPublicIpTxt, '[0-9]{1,3}(\.[0-9]{1,3}){3}|([0-9A-Fa-f]{0,4}:){2,7}([0-9A-Fa-f]{1,4})');   // IPv4 or IPv6
         ErrorText += CheckJsonTokenValidity(JsonObject, VendorVersionTxt, 'Business.*Central.*=\d+');           // for example Business Central=23
 
         if ErrorText <> '' then
-            FeatureTelemetry.LogError('0000LJH', HMRCFraudPreventHeadersTok, FraudPreventHeadersNotValidTxt, ErrorText)
+            FeatureTelemetry.LogError('0000LJH', HMRCFraudPreventHeadersTok, FraudPreventHeadersNotValidTxt, ErrorText, '', CustomDimensions)
         else
             FeatureTelemetry.LogUsage('0000LJI', HMRCFraudPreventHeadersTok, FraudPreventHeadersValidTxt);
+    end;
+
+    [TryFunction]
+    [NonDebuggable]
+    internal procedure GetServerPublicIPFromAzureFunction(var ServerIPAddress: Text)
+    var
+        AzureFunctions: Codeunit "Azure Functions";
+        AzureFunctionsResponse: Codeunit "Azure Functions Response";
+        AzureFunctionsAuthentication: Codeunit "Azure Functions Authentication";
+        AzureFunctionsAuth: Interface "Azure Functions Authentication";
+        ResultResponseMsg: HttpResponseMessage;
+        ClientID, Scope, AuthURL, Endpoint : Text;
+        CustomDimensions: Dictionary of [Text, Text];
+        QueryDict: Dictionary of [Text, Text];
+        Cert: SecretText;
+    begin
+        if not EnvironmentInformation.IsSaaS() then
+            exit;
+
+        GetAzFunctionSecrets(ClientID, Cert, AuthURL, Scope, Endpoint);
+        AzureFunctionsAuth := AzureFunctionsAuthentication.CreateOAuth2WithCert(Endpoint, '', ClientID, Cert, AuthURL, '', Scope);
+        AzureFunctionsResponse := AzureFunctions.SendGetRequest(AzureFunctionsAuth, QueryDict);
+        if not AzureFunctionsResponse.IsSuccessful() then begin
+            AzureFunctionsResponse.GetHttpResponse(ResultResponseMsg);
+            CustomDimensions.Add('HttpStatusCode', Format(ResultResponseMsg.HttpStatusCode));
+            CustomDimensions.Add('ResponseError', AzureFunctionsResponse.GetError());
+            CustomDimensions.Add('ReasonPhrase', ResultResponseMsg.ReasonPhrase);
+            CustomDimensions.Add('IsBlockedByEnvironment', Format(ResultResponseMsg.IsBlockedByEnvironment));
+            FeatureTelemetry.LogError('0000NRO', HMRCFraudPreventHeadersTok, '', GetPublicIPAddressRequestFailedErr, '', CustomDimensions);
+        end;
+        AzureFunctionsResponse.GetResultAsText(ServerIPAddress);
+        if ServerIPAddress = '' then
+            FeatureTelemetry.LogError('0000NRP', HMRCFraudPreventHeadersTok, '', EmptyPublicIPAddressAzFuncErr)
+        else
+            FeatureTelemetry.LogUsage('0000NRW', HMRCFraudPreventHeadersTok, NonEmptyPublicIPAddressAzFuncTxt);
+    end;
+
+    [NonDebuggable]
+    local procedure GetAzFunctionSecrets(var ClientID: Text; var Certificate: SecretText; var AuthURL: Text; var Scope: Text; var Endpoint: Text)
+    var
+        AzureKeyVault: Codeunit "Azure Key Vault";
+        CertificateName: Text;
+    begin
+        if not EnvironmentInformation.IsSaaS() then
+            exit;
+
+        if not AzureKeyVault.GetAzureKeyVaultSecret(AzFunctionClientIdKeyTok, ClientID) then begin
+            FeatureTelemetry.LogError('0000NRQ', HMRCFraudPreventHeadersTok, '', StrSubstNo(CannotGetClientIdFromKeyVaultErr, AzFunctionClientIdKeyTok));
+            exit;
+        end;
+
+        if not AzureKeyVault.GetAzureKeyVaultSecret(AzFuncCertificateNameTok, CertificateName) then begin
+            FeatureTelemetry.LogError('0000NRR', HMRCFraudPreventHeadersTok, '', StrSubstNo(CannotGetCertFromKeyVaultErr, AzFuncCertificateNameTok));
+            exit;
+        end;
+        if not AzureKeyVault.GetAzureKeyVaultCertificate(CertificateName, Certificate) then begin
+            FeatureTelemetry.LogError('0000NRS', HMRCFraudPreventHeadersTok, '', StrSubstNo(CannotGetCertFromKeyVaultErr, AzFuncCertificateNameTok));
+            exit;
+        end;
+
+        if not AzureKeyVault.GetAzureKeyVaultSecret(AzFuncAuthURLKeyTok, AuthURL) then begin
+            FeatureTelemetry.LogError('0000NRT', HMRCFraudPreventHeadersTok, '', StrSubstNo(CannotGetAuthorityURLFromKeyVaultErr, AzFuncAuthURLKeyTok));
+            exit;
+        end;
+
+        if not AzureKeyVault.GetAzureKeyVaultSecret(AzFuncScopeKeyTok, Scope) then begin
+            FeatureTelemetry.LogError('0000NRU', HMRCFraudPreventHeadersTok, '', StrSubstNo(CannotGetScopeFromKeyVaultErr, AzFuncScopeKeyTok));
+            exit;
+        end;
+
+        if not AzureKeyVault.GetAzureKeyVaultSecret(AzFuncEndpointTextKeyTok, Endpoint) then begin
+            FeatureTelemetry.LogError('0000NRV', HMRCFraudPreventHeadersTok, '', StrSubstNo(CannotGetEndpointTextFromKeyVaultErr, AzFuncEndpointTextKeyTok));
+            exit;
+        end;
+    end;
+
+    [TryFunction]
+    internal procedure GetServerPublicIPFromTenantSettings(var ServerIPAddress: Text)
+    var
+        TenantSettings: DotNet NavTenantSettingsHelper;
+        RegEx: DotNet Regex;
+        IPAddressRegExPattern: Text;
+    begin
+        if not EnvironmentInformation.IsSaaS() then
+            exit;
+
+        ServerIPAddress := TenantSettings.GetPublicIpAddress();
+
+        if ServerIPAddress = '' then begin
+            FeatureTelemetry.LogError('0000O1D', HMRCFraudPreventHeadersTok, '', EmptyPublicIPAddressErr);
+            exit;
+        end;
+
+        IPAddressRegExPattern := '[0-9]{1,3}(\.[0-9]{1,3}){3}|([0-9A-Fa-f]{0,4}:){2,7}([0-9A-Fa-f]{1,4})';   // IPv4 or IPv6
+        RegEx := RegEx.Regex(IPAddressRegExPattern);
+        if not RegEx.IsMatch(ServerIPAddress) then begin
+            FeatureTelemetry.LogError('0000O1E', HMRCFraudPreventHeadersTok, '', StrSubstNo(IPAddressNotMatchPatternErr, IPAddressRegExPattern));
+            ServerIPAddress := '';
+            exit;
+        end;
+
+        FeatureTelemetry.LogUsage('0000O1F', HMRCFraudPreventHeadersTok, NonEmptyPublicIPAddressTxt);
     end;
 
     local procedure CheckJsonTokenValidity(var JsonObject: JsonObject; TokenKey: Text; ValidationRegExPattern: Text) ErrorText: Text
@@ -477,6 +610,20 @@ codeunit 10538 "MTD OAuth 2.0 Mgt"
             ErrorText := StrSubstNo(JsonValueNotMatchedErr, TokenKey, ValidationRegExPattern);
             exit;
         end;
+    end;
+
+    local procedure GetJsonTokenValue(var JsonObject: JsonObject; TokenKey: Text) TextValue: Text
+    var
+        JsonToken: JsonToken;
+    begin
+        if JsonObject.Get(TokenKey, JsonToken) then
+            if JsonToken.WriteTo(TextValue) then
+                exit(TextValue);
+    end;
+
+    local procedure IsLoopbackIPAddress(IPAddress: Text): Boolean
+    begin
+        exit((IPAddress = IPv4LoopbackIPAddressTxt) or (IPAddress = IPv6LoopbackIPAddressTxt));
     end;
 
     [EventSubscriber(ObjectType::Page, Page::"OAuth 2.0 Setup", 'OnBeforeActionEvent', 'RefreshAccessToken', false, false)]

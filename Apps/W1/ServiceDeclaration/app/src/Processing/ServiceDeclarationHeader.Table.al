@@ -1,4 +1,4 @@
-﻿// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License. See License.txt in the project root for license information.
 // ------------------------------------------------------------------------------------------------
@@ -19,10 +19,12 @@ table 5023 "Service Declaration Header"
             Caption = 'No.';
 
             trigger OnValidate()
+            var
+                NoSeries: Codeunit "No. Series";
             begin
                 if "No." <> xRec."No." then begin
                     TestNoSeries();
-                    NoSeriesMgt.TestManual(ServiceDeclarationSetup."Declaration No. Series");
+                    NoSeries.TestManual(ServiceDeclarationSetup."Declaration No. Series");
                     "No. Series" := '';
                 end;
             end;
@@ -87,14 +89,18 @@ table 5023 "Service Declaration Header"
 
     var
         ServiceDeclarationSetup: Record "Service Declaration Setup";
-        NoSeriesMgt: Codeunit NoSeriesManagement;
         ServDeclAlreadyExistErr: Label 'The service declaration %1 already exists.', Comment = '%1 = service declaration number.';
 
     trigger OnInsert()
+    var
+        NoSeries: Codeunit "No. Series";
     begin
         if "No." = '' then begin
             TestNoSeries();
-            NoSeriesMgt.InitSeries(ServiceDeclarationSetup."Declaration No. Series", xRec."No. Series", 0D, "No.", "No. Series");
+                "No. Series" := ServiceDeclarationSetup."Declaration No. Series";
+                if NoSeries.AreRelated("No. Series", xRec."No. Series") then
+                    "No. Series" := xRec."No. Series";
+                "No." := NoSeries.GetNextNo("No. Series");
         end;
     end;
 
@@ -106,6 +112,14 @@ table 5023 "Service Declaration Header"
     trigger OnRename()
     begin
         CheckStatusOpen();
+    end;
+
+    trigger OnDelete()
+    var
+        ServiceDeclarationLine: Record "Service Declaration Line";
+    begin
+        ServiceDeclarationLine.SetRange("Service Declaration No.", "No.");
+        ServiceDeclarationLine.DeleteAll();
     end;
 
     procedure SuggestLines()
@@ -133,11 +147,12 @@ table 5023 "Service Declaration Header"
     procedure AssistEdit(OldServDeclHeader: Record "Service Declaration Header") Result: Boolean
     var
         ServDeclHeader: Record "Service Declaration Header";
+        NoSeries: Codeunit "No. Series";
     begin
         ServDeclHeader.Copy(Rec);
         TestNoSeries();
-        if NoSeriesMgt.SelectSeries(ServiceDeclarationSetup."Declaration No. Series", OldServDeclHeader."No. Series", ServDeclHeader."No. Series") then begin
-            NoSeriesMgt.SetSeries(ServDeclHeader."No.");
+        if NoSeries.LookupRelatedNoSeries(ServiceDeclarationSetup."Declaration No. Series", OldServDeclHeader."No. Series", ServDeclHeader."No. Series") then begin
+            ServDeclHeader."No." := NoSeries.GetNextNo(ServDeclHeader."No. Series");
             if ServDeclHeader.Get(ServDeclHeader."No.") then
                 Error(ServDeclAlreadyExistErr, ServDeclHeader."No.");
             Rec := ServDeclHeader;

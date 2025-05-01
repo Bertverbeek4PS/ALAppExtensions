@@ -315,6 +315,25 @@ page 30126 "Shpfy Products"
                     Tags.RunModal();
                 end;
             }
+            action(Metafields)
+            {
+                ApplicationArea = All;
+                Caption = 'Metafields';
+                Image = PriceAdjustment;
+                Promoted = true;
+                PromotedCategory = Process;
+                PromotedIsBig = true;
+                PromotedOnly = true;
+                ToolTip = 'Add metafields to a product. This can be used for adding custom data fields to products in Shopify.';
+
+                trigger OnAction()
+                var
+                    Metafields: Page "Shpfy Metafields";
+                begin
+                    Rec.TestField(Id);
+                    Metafields.RunForResource(Database::"Shpfy Product", Rec.Id, Rec."Shop Code");
+                end;
+            }
             group(Sync)
             {
                 action(SyncProducts)
@@ -332,7 +351,10 @@ page 30126 "Shpfy Products"
                     var
                         BackgroundSyncs: Codeunit "Shpfy Background Syncs";
                     begin
-                        BackgroundSyncs.ProductsSync(Rec."Shop Code");
+                        if Rec."Shop Code" <> '' then
+                            BackgroundSyncs.ProductsSync(Rec."Shop Code")
+                        else
+                            BackgroundSyncs.ProductsSync(CopyStr(Rec.GetFilter("Shop Code"), 1, MaxStrLen(Rec."Shop Code")));
                     end;
                 }
                 action(SyncProductPrices)
@@ -350,7 +372,10 @@ page 30126 "Shpfy Products"
                     var
                         BackgroundSyncs: Codeunit "Shpfy Background Syncs";
                     begin
-                        BackgroundSyncs.ProductPricesSync(Rec."Shop Code");
+                        if Rec."Shop Code" <> '' then
+                            BackgroundSyncs.ProductPricesSync(Rec."Shop Code")
+                        else
+                            BackgroundSyncs.ProductPricesSync(CopyStr(Rec.GetFilter("Shop Code"), 1, MaxStrLen(Rec."Shop Code")));
                     end;
                 }
                 action(SyncImages)
@@ -367,7 +392,10 @@ page 30126 "Shpfy Products"
                     var
                         BackgroundSyncs: Codeunit "Shpfy Background Syncs";
                     begin
-                        BackgroundSyncs.ProductImagesSync(Rec."Shop Code", '');
+                        if Rec."Shop Code" <> '' then
+                            BackgroundSyncs.ProductImagesSync(Rec."Shop Code", '')
+                        else
+                            BackgroundSyncs.ProductImagesSync(CopyStr(Rec.GetFilter("Shop Code"), 1, MaxStrLen(Rec."Shop Code")), '');
                     end;
                 }
                 action(SyncInventory)
@@ -384,7 +412,10 @@ page 30126 "Shpfy Products"
                     var
                         BackgroundSyncs: Codeunit "Shpfy Background Syncs";
                     begin
-                        BackgroundSyncs.InventorySync(Rec."Shop Code");
+                        if Rec."Shop Code" <> '' then
+                            BackgroundSyncs.InventorySync(Rec."Shop Code")
+                        else
+                            BackgroundSyncs.InventorySync(CopyStr(Rec.GetFilter("Shop Code"), 1, MaxStrLen(Rec."Shop Code")));
                     end;
                 }
             }

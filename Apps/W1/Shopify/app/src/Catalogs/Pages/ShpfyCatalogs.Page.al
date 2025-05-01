@@ -25,6 +25,11 @@ page 30159 "Shpfy Catalogs"
                     ToolTip = 'Specifies the unique identifier for the catalog in Shopify.';
                     Editable = false;
                 }
+                field("Customer No."; Rec."Customer No.")
+                {
+                    ApplicationArea = All;
+                    ToolTip = 'Specifies the customer''s no.  When Customer No. is Selected: Parameters like ''Customer Discount Group'', ''Customer Price Group'', and ''Allow Line Discount'' on the customer card take precedence over catalog settings';
+                }
                 field(Name; Rec.Name)
                 {
                     ApplicationArea = All;
@@ -162,9 +167,17 @@ page 30159 "Shpfy Catalogs"
 
                 trigger OnAction()
                 var
+                    Shop: Record "Shpfy Shop";
+                    SyncCatalogsPrices: Report "Shpfy Sync Catalog Prices";
                     BackgroundSyncs: Codeunit "Shpfy Background Syncs";
                 begin
-                    BackgroundSyncs.CatalogPricesSync(Rec."Shop Code", Rec.GetFilter("Company SystemId"));
+                    if Rec.GetFilter("Company SystemId") <> '' then
+                        BackgroundSyncs.CatalogPricesSync(Rec."Shop Code", Rec.GetFilter("Company SystemId"))
+                    else begin
+                        Shop.SetRange(Code, Rec."Shop Code");
+                        SyncCatalogsPrices.SetTableView(Shop);
+                        SyncCatalogsPrices.Run();
+                    end;
                 end;
             }
         }

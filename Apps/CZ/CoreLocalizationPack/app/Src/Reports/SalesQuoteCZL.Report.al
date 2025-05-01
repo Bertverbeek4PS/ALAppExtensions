@@ -1,4 +1,4 @@
-﻿// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License. See License.txt in the project root for license information.
 // ------------------------------------------------------------------------------------------------
@@ -21,14 +21,14 @@ using Microsoft.Utilities;
 using System.Email;
 using System.Globalization;
 using System.Security.User;
+using System.Text;
 using System.Utilities;
 
 report 31186 "Sales Quote CZL"
 {
-    DefaultLayout = RDLC;
-    RDLCLayout = './Src/Reports/SalesQuote.rdl';
     Caption = 'Sales Quote';
     PreviewMode = PrintLayout;
+    DefaultRenderingLayout = "SalesQuote.rdl";
     WordMergeDataItem = "Sales Header";
 
     dataset
@@ -184,13 +184,13 @@ report 31186 "Sales Quote CZL"
             column(OrderDate_SalesHeaderCaption; FieldCaption("Order Date"))
             {
             }
-            column(OrderDate_SalesHeader; "Order Date")
+            column(OrderDate_SalesHeader; Format("Order Date"))
             {
             }
             column(RequestedDeliveryDate_SalesHeaderCaption; FieldCaption("Requested Delivery Date"))
             {
             }
-            column(RequestedDeliveryDate_SalesHeader; "Requested Delivery Date")
+            column(RequestedDeliveryDate_SalesHeader; Format("Requested Delivery Date"))
             {
             }
             column(PaymentTerms; PaymentTerms.Description)
@@ -217,19 +217,22 @@ report 31186 "Sales Quote CZL"
             column(Amount_SalesHeader; Amount)
             {
             }
+            column(Formatted_Amount_SalesHeader; format(Amount, 0, AutoFormat.ResolveAutoFormat(Enum::"Auto Format"::AmountFormat, "Sales Header"."Currency Code")))
+            {
+            }
             column(AmountIncludingVAT_SalesHeaderCaption; FieldCaption("Amount Including VAT"))
             {
             }
             column(AmountIncludingVAT_SalesHeader; "Amount Including VAT")
             {
             }
+            column(Formatted_AmountIncludingVAT_SalesHeader; format("Amount Including VAT", 0, AutoFormat.ResolveAutoFormat(Enum::"Auto Format"::AmountFormat, "Sales Header"."Currency Code")))
+            {
+            }
             column(QuoteValidUntilDate_SalesHeaderCaption; QuoteValidUntilDateLbl)
             {
             }
-            column(QuoteValidUntilDate_SalesHeader; "Quote Valid Until Date")
-            {
-            }
-            column(QuoteValidUntilDateFormat_SalesHeader; FormatDate("Quote Valid Until Date"))
+            column(QuoteValidUntilDate_SalesHeader; Format("Quote Valid Until Date"))
             {
             }
             column(DocFooterText; DocFooterText)
@@ -330,6 +333,9 @@ report 31186 "Sales Quote CZL"
                     column(UnitPrice_SalesLine; "Unit Price")
                     {
                     }
+                    column(Formatted_UnitPrice_SalesLine; format("Unit Price", 0, AutoFormat.ResolveAutoFormat(Enum::"Auto Format"::AmountFormat, "Sales Header"."Currency Code")))
+                    {
+                    }
                     column(LineDiscount_SalesLineCaption; FieldCaption("Line Discount %"))
                     {
                     }
@@ -348,10 +354,16 @@ report 31186 "Sales Quote CZL"
                     column(LineAmount_SalesLine; "Line Amount")
                     {
                     }
+                    column(Formatted_LineAmount_SalesLine; format("Line Amount", 0, AutoFormat.ResolveAutoFormat(Enum::"Auto Format"::AmountFormat, "Sales Header"."Currency Code")))
+                    {
+                    }
                     column(InvDiscountAmount_SalesLineCaption; FieldCaption("Inv. Discount Amount"))
                     {
                     }
                     column(InvDiscountAmount_SalesLine; "Inv. Discount Amount")
+                    {
+                    }
+                    column(Formatted_InvDiscountAmount_SalesLine; format("Inv. Discount Amount", 0, AutoFormat.ResolveAutoFormat(Enum::"Auto Format"::AmountFormat, "Sales Header"."Currency Code")))
                     {
                     }
                 }
@@ -486,6 +498,25 @@ report 31186 "Sales Quote CZL"
             LogInteractionEnable := LogInteraction;
         end;
     }
+
+    rendering
+    {
+        layout("SalesQuote.rdl")
+        {
+            Type = RDLC;
+            LayoutFile = './Src/Reports/SalesQuote.rdl';
+            Caption = 'Sales Quote (RDL)';
+            Summary = 'The Sales Quote (RDL) provides a detailed layout.';
+        }
+        layout("SalesQuoteEmail.docx")
+        {
+            Type = Word;
+            LayoutFile = './Src/Reports/SalesQuoteEmail.docx';
+            Caption = 'Sales Quote Email (Word)';
+            Summary = 'The Sales Quote Email (Word) provides an email body layout.';
+        }
+    }
+
     trigger OnInitReport()
     begin
         "Sales & Receivables Setup".Get();
@@ -499,9 +530,6 @@ report 31186 "Sales Quote CZL"
     end;
 
     var
-        PaymentTerms: Record "Payment Terms";
-        PaymentMethod: Record "Payment Method";
-        ShipmentMethod: Record "Shipment Method";
         SalesReceivablesSetup: Record "Sales & Receivables Setup";
         LanguageMgt: Codeunit Language;
         FormatAddress: Codeunit "Format Address";
@@ -509,14 +537,7 @@ report 31186 "Sales Quote CZL"
         FormatDocumentMgtCZL: Codeunit "Format Document Mgt. CZL";
         SegManagement: Codeunit SegManagement;
         ArchiveManagement: Codeunit ArchiveManagement;
-        CompanyAddr: array[8] of Text[100];
-        CustAddr: array[8] of Text[100];
-        ShipToAddr: array[8] of Text[100];
-        DocFooterText: Text[1000];
-        NoOfCopies: Integer;
-        NoOfLoops: Integer;
-        LogInteraction: Boolean;
-        ArchiveDocument: Boolean;
+        AutoFormat: Codeunit "Auto Format";
         LogInteractionEnable: Boolean;
         DocumentLbl: Label 'Quote';
         PageLbl: Label 'Page';
@@ -539,6 +560,19 @@ report 31186 "Sales Quote CZL"
         ClosingLbl: Label 'Sincerely';
         BodyLbl: Label 'Thank you for your business. Your quote is attached to this message.';
         DocumentNoLbl: Label 'No.';
+
+    protected var
+        PaymentTerms: Record "Payment Terms";
+        PaymentMethod: Record "Payment Method";
+        ShipmentMethod: Record "Shipment Method";
+        CompanyAddr: array[8] of Text[100];
+        CustAddr: array[8] of Text[100];
+        ShipToAddr: array[8] of Text[100];
+        DocFooterText: Text[1000];
+        NoOfCopies: Integer;
+        NoOfLoops: Integer;
+        ArchiveDocument: Boolean;
+        LogInteraction: Boolean;
 
     procedure InitializeRequest(NoOfCopiesFrom: Integer; ArchiveDocumentFrom: Boolean; LogInteractionFrom: Boolean)
     begin
@@ -564,11 +598,6 @@ report 31186 "Sales Quote CZL"
     begin
         FormatAddress.SalesHeaderBillTo(CustAddr, SalesHeader);
         FormatAddress.SalesHeaderShipTo(ShipToAddr, CustAddr, SalesHeader);
-    end;
-
-    local procedure FormatDate(DateValue: Date): Text
-    begin
-        exit(Format(DateValue, 0, '<Day>.<Month>.<Year4>'));
     end;
 
     local procedure IsReportInPreviewMode(): Boolean

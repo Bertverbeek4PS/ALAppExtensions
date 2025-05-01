@@ -21,21 +21,13 @@ tableextension 11723 "Gen. Journal Line CZL" extends "Gen. Journal Line"
         {
             trigger OnAfterValidate()
             var
-#if not CLEAN22
-#pragma warning disable AL0432
-                ReplaceVATDateMgt: Codeunit "Replace VAT Date Mgt. CZL";
-#pragma warning restore AL0432
-#endif
                 VATReportingDateMgt: Codeunit "VAT Reporting Date Mgt";
             begin
-#if not CLEAN22
-                if not ReplaceVATDateMgt.IsEnabled() then
-                    exit;
-#endif
                 if not VATReportingDateMgt.IsVATDateEnabled() then
                     if CurrFieldNo = Rec.FieldNo("VAT Reporting Date") then
                         Rec.TestField("VAT Reporting Date", Rec."Posting Date");
                 Rec."Original Doc. VAT Date CZL" := Rec."VAT Reporting Date";
+                Validate("VAT %");
             end;
         }
         field(11712; "VAT Delay CZL"; Boolean)
@@ -170,6 +162,14 @@ tableextension 11723 "Gen. Journal Line CZL" extends "Gen. Journal Line"
             TableRelation = "SWIFT Code";
             DataClassification = CustomerContent;
         }
+        field(11750; "Additional Currency Factor CZL"; Decimal)
+        {
+            Caption = 'Additional Currency Factor';
+            DecimalPlaces = 0 : 15;
+            Editable = false;
+            MinValue = 0;
+            DataClassification = CustomerContent;
+        }
         field(11776; "VAT Currency Factor CZL"; Decimal)
         {
             Caption = 'VAT Currency Factor';
@@ -184,37 +184,16 @@ tableextension 11723 "Gen. Journal Line CZL" extends "Gen. Journal Line"
             DataClassification = CustomerContent;
             TableRelation = Currency;
         }
+#if not CLEANSCHEMA25
         field(11780; "VAT Date CZL"; Date)
         {
             Caption = 'VAT Date';
             DataClassification = CustomerContent;
-#if not CLEAN22
-            ObsoleteState = Pending;
-            ObsoleteTag = '22.0';
-#else
             ObsoleteState = Removed;
             ObsoleteTag = '25.0';
-#endif
             ObsoleteReason = 'Replaced by VAT Reporting Date.';
-#if not CLEAN22
-
-            trigger OnValidate()
-            var
-                VATReportingDateMgt: Codeunit "VAT Reporting Date Mgt";
-            begin
-#if not CLEAN22
-                if CurrFieldNo = Rec.FieldNo("VAT Date CZL") then
-                    ReplaceVATDateMgtCZL.TestIsNotEnabled();
-                if ReplaceVATDateMgtCZL.IsEnabled() then
-                    exit;
-#endif 
-                if not VATReportingDateMgt.IsVATDateEnabled() then
-                    if CurrFieldNo = FieldNo("VAT Date CZL") then
-                        TestField("VAT Date CZL", "Posting Date");
-                "Original Doc. VAT Date CZL" := "VAT Date CZL";
-            end;
-#endif
         }
+#endif
         field(11781; "Registration No. CZL"; Text[20])
         {
             Caption = 'Registration No.';
@@ -270,6 +249,8 @@ tableextension 11723 "Gen. Journal Line CZL" extends "Gen. Journal Line"
                 Vend: Record Vendor;
             begin
                 TestField("Original Doc. Partner Type CZL");
+                "Country/Region Code" := '';
+                "VAT Registration No." := '';
                 if "Original Doc. Partner No. CZL" <> '' then
                     case "Original Doc. Partner Type CZL" of
                         "Original Doc. Partner Type CZL"::Customer:
@@ -285,10 +266,6 @@ tableextension 11723 "Gen. Journal Line CZL" extends "Gen. Journal Line"
                                 Validate("VAT Registration No.", Vend."VAT Registration No.");
                             end;
                     end
-                else begin
-                    Validate("Country/Region Code", '');
-                    Validate("VAT Registration No.", '');
-                end;
             end;
         }
         field(31112; "Original Doc. VAT Date CZL"; Date)
@@ -303,12 +280,6 @@ tableextension 11723 "Gen. Journal Line CZL" extends "Gen. Journal Line"
             Editable = false;
         }
     }
-#if not CLEAN22
-#pragma warning disable AL0432
-    var
-        ReplaceVATDateMgtCZL: Codeunit "Replace VAT Date Mgt. CZL";
-#pragma warning restore AL0432
-#endif
 
     procedure AdjustDebitCreditCZL(Invert: Boolean)
     var
@@ -352,13 +323,6 @@ tableextension 11723 "Gen. Journal Line CZL" extends "Gen. Journal Line"
         GeneralLedgerSetup.Get();
         exit((ClosingDate("Posting Date") <> "Posting Date") or not GeneralLedgerSetup."Do Not Check Dimensions CZL");
     end;
-#if not CLEAN22
-
-    internal procedure IsReplaceVATDateEnabled(): Boolean
-    begin
-        exit(ReplaceVATDateMgtCZL.IsEnabled());
-    end;
-#endif
 
     [IntegrationEvent(false, false)]
     local procedure OnAfterUpdateBankInfoCZL(var GenJournalLine: Record "Gen. Journal Line")

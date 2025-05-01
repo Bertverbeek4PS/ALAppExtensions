@@ -58,6 +58,11 @@ page 11755 "Reg. No. Service Config CZL"
                         end;
                     end;
                 }
+                field("Post Code without Space"; Rec."Post Code without Space")
+                {
+                    ApplicationArea = Basic, Suite;
+                    ToolTip = 'Specifies whether the postcode provided by ARES shouldn''t be converted into format with a space, i.e. XXX XX.';
+                }
                 field(ServiceConditionsLbl; ServiceConditionsLbl)
                 {
                     Caption = 'Service Conditions';
@@ -85,10 +90,6 @@ page 11755 "Reg. No. Service Config CZL"
                 ApplicationArea = Basic, Suite;
                 Caption = 'Set Default Endpoint';
                 Image = Default;
-                Promoted = true;
-                PromotedCategory = Process;
-                PromotedIsBig = true;
-                PromotedOnly = true;
                 ToolTip = 'Set the default URL in the Service Endpoint field.';
 
                 trigger OnAction()
@@ -104,6 +105,15 @@ page 11755 "Reg. No. Service Config CZL"
                     Rec."Service Endpoint" := RegLookupExtDataCZL.GetRegistrationNoValidationWebServiceURL();
                     Rec.Modify(true);
                 end;
+            }
+        }
+        area(Promoted)
+        {
+            group(Category_Process)
+            {
+                actionref(SettoDefault_Promoted; SettoDefault)
+                {
+                }
             }
         }
     }

@@ -150,7 +150,7 @@ report 31193 "Service Quote CZL"
             column(OrderDate_ServiceHeaderCaption; FieldCaption("Order Date"))
             {
             }
-            column(OrderDate_ServiceHeader; "Order Date")
+            column(OrderDate_ServiceHeader; Format("Order Date"))
             {
             }
             column(YourReference_ServiceHeaderCaption; FieldCaption("Your Reference"))
@@ -450,8 +450,8 @@ report 31193 "Service Quote CZL"
                 CurrReport.Language := LanguageMgt.GetLanguageIdOrDefault("Language Code");
                 CurrReport.FormatRegion := LanguageMgt.GetFormatRegionOrDefault("Format Region");
 
-                FormatAddress.ServiceOrderSellto(CustAddr, "Service Header");
-                FormatAddress.ServiceHeaderShipTo(ShipToAddr, "Service Header");
+                ServiceFormatAddress.ServiceOrderSellto(CustAddr, "Service Header");
+                ServiceFormatAddress.ServiceHeaderShipTo(ShipToAddr, "Service Header");
                 FormatDocument.SetPaymentTerms(PaymentTerms, "Payment Terms Code", "Language Code");
                 FormatDocument.SetShipmentMethod(ShipmentMethod, "Shipment Method Code", "Language Code");
                 FormatDocument.SetPaymentMethod(PaymentMethod, "Payment Method Code", "Language Code");
@@ -512,23 +512,12 @@ report 31193 "Service Quote CZL"
     end;
 
     var
-        PaymentTerms: Record "Payment Terms";
-        PaymentMethod: Record "Payment Method";
-        ShipmentMethod: Record "Shipment Method";
         LanguageMgt: Codeunit Language;
         FormatAddress: Codeunit "Format Address";
         FormatDocument: Codeunit "Format Document";
         FormatDocumentMgtCZL: Codeunit "Format Document Mgt. CZL";
+        ServiceFormatAddress: Codeunit "Service Format Address";
         SegManagement: Codeunit SegManagement;
-        CompanyAddr: array[8] of Text[100];
-        CustAddr: array[8] of Text[100];
-        ShipToAddr: array[8] of Text[100];
-        DocFooterText: Text[1000];
-        NoOfCopies: Integer;
-        NoOfLoops: Integer;
-        Number1: Integer;
-        Number2: Integer;
-        LogInteraction: Boolean;
         LogInteractionEnable: Boolean;
         DocumentLbl: Label 'Service Quote';
         PageLbl: Label 'Page';
@@ -548,6 +537,20 @@ report 31193 "Service Quote CZL"
         AmountLbl: Label 'Amount';
         GrossAmountLbl: Label 'Gross Amount';
         TotalLbl: Label 'Total';
+
+    protected var
+        PaymentTerms: Record "Payment Terms";
+        PaymentMethod: Record "Payment Method";
+        ShipmentMethod: Record "Shipment Method";
+        CompanyAddr: array[8] of Text[100];
+        CustAddr: array[8] of Text[100];
+        ShipToAddr: array[8] of Text[100];
+        DocFooterText: Text[1000];
+        NoOfCopies: Integer;
+        NoOfLoops: Integer;
+        Number1: Integer;
+        Number2: Integer;
+        LogInteraction: Boolean;
 
     procedure InitializeRequest(NoOfCopiesFrom: Integer; LogInteractionFrom: Boolean)
     begin

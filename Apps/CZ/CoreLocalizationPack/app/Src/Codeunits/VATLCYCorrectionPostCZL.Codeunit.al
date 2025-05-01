@@ -124,11 +124,6 @@ codeunit 31013 "VAT LCY Correction-Post CZL"
         GenJournalLine."Document No." := VATLCYCorrectionBufferCZL."Document No.";
         GenJournalLine.Description := PostingDescriptionTxt;
         GenJournalLine."Posting Date" := VATLCYCorrectionBufferCZL."Posting Date";
-#if not CLEAN22
-#pragma warning disable AL0432
-        GenJournalLine."VAT Date CZL" := VATLCYCorrectionBufferCZL."VAT Date";
-#pragma warning restore AL0432
-#endif
         GenJournalLine."VAT Reporting Date" := VATLCYCorrectionBufferCZL."VAT Date";
         GenJournalLine."Account Type" := GenJournalLine."Account Type"::"G/L Account";
         GenJournalLine."System-Created Entry" := true;
@@ -142,6 +137,7 @@ codeunit 31013 "VAT LCY Correction-Post CZL"
         GenJournalLine."VAT Registration No." := VATLCYCorrectionBufferCZL."VAT Registration No.";
         GenJournalLine."Registration No. CZL" := VATLCYCorrectionBufferCZL."Registration No.";
         GenJournalLine."Tax Registration No. CZL" := VATLCYCorrectionBufferCZL."Tax Registration No.";
+        GenJournalLine."Dimension Set ID" := VATLCYCorrectionBufferCZL."Dimension Set ID";
 
         if VATPosting then begin
             GenJournalLine."VAT Base Amount" := 0;
@@ -189,7 +185,7 @@ codeunit 31013 "VAT LCY Correction-Post CZL"
             VATLCYCorrectionBufferCZL.TestField("VAT Date", VATLCYCorrectionBufferCZL."Posting Date")
         else begin
             VATLCYCorrectionBufferCZL.TestField("VAT Date");
-            if VATDateHandlerCZL.VATDateNotAllowed(VATLCYCorrectionBufferCZL."VAT Date") then
+            if not VATDateHandlerCZL.IsVATDateInAllowedPeriod(VATLCYCorrectionBufferCZL."VAT Date") then
                 VATLCYCorrectionBufferCZL.FieldError("VAT Date", StrSubstNo(VATRangeErr, VATLCYCorrectionBufferCZL."VAT Date"));
             VATDateHandlerCZL.VATPeriodCZLCheck(VATLCYCorrectionBufferCZL."VAT Date");
         end;

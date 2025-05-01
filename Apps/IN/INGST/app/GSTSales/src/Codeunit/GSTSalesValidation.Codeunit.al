@@ -20,7 +20,7 @@ using Microsoft.Sales.Customer;
 using Microsoft.Sales.Document;
 using Microsoft.Sales.History;
 using Microsoft.Sales.Posting;
-#if not CLEAN23
+#if not CLEAN25
 using Microsoft.Sales.Pricing;
 #endif
 using Microsoft.Sales.Receivables;
@@ -114,6 +114,7 @@ codeunit 18143 "GST Sales Validation"
         if (SalesLine."Unit Price Incl. of Tax" = 0) or (SalesLine."Total UPIT Amount" = 0) then
             exit;
 
+        TaxTransactionValue.SetCurrentKey("Tax Record ID", "Tax Type");
         TaxTransactionValue.SetRange("Tax Type", GSTSetup."GST Tax Type");
         TaxTransactionValue.SetRange("Tax Record ID", SalesLine.RecordId);
         TaxTransactionValue.SetRange("Value Type", TaxTransactionValue."Value Type"::COMPONENT);
@@ -147,7 +148,7 @@ codeunit 18143 "GST Sales Validation"
         SalesLine."Total UPIT Amount" := SalesLine."Unit Price Incl. of Tax" * SalesLine.Quantity - SalesLine."Line Discount Amount";
     end;
 
-#if not CLEAN23
+#if not CLEAN25
     //AssignPrice Inclusice of Tax
 #pragma warning disable AS0072
     [Obsolete('Replaced by the new implementation (V16) of price calculation.', '19.0')]
@@ -1231,19 +1232,27 @@ codeunit 18143 "GST Sales Validation"
     end;
 
     local procedure ShipToAddrfields(var SalesHeader: Record "Sales Header"; ShipToAddress: Record "Ship-to Address")
+    var
+        IsHandled: Boolean;
     begin
+        OnBeforeShipToAddrfields(SalesHeader, ShipToAddress, IsHandled);
+        if IsHandled then
+            exit;
+
         if SalesHeader."GST Customer Type" <> "GST Customer Type"::" " then
             if SalesHeader."GST Customer Type" in [
                 "GST Customer Type"::Exempted,
                 "GST Customer Type"::"Deemed Export",
                 "GST Customer Type"::"SEZ Development",
                 "GST Customer Type"::"SEZ Unit",
-                "GST Customer Type"::Registered]
+                "GST Customer Type"::Registered,
+                "GST Customer Type"::Unregistered]
             then begin
                 ShipToAddress.TestField(State);
-                if ShipToAddress."GST Registration No." = '' then
-                    if ShipToAddress."ARN No." = '' then
-                        Error(ShiptoGSTARNErr);
+                if SalesHeader."GST Customer Type" <> SalesHeader."GST Customer Type"::Unregistered then
+                    if ShipToAddress."GST Registration No." = '' then
+                        if ShipToAddress."ARN No." = '' then
+                            Error(ShiptoGSTARNErr);
                 SalesHeader."GST Ship-to State Code" := ShipToAddress.State;
                 SalesHeader."Ship-to GST Reg. No." := ShipToAddress."GST Registration No.";
                 SalesHeader."GST-Ship to Customer Type" := ShipToAddress."Ship-to GST Customer Type";
@@ -1253,6 +1262,8 @@ codeunit 18143 "GST Sales Validation"
                     SalesHeader.State := ShipToAddress.State;
                 AssignInvoiceType(SalesHeader);
             end;
+
+        OnAfterShipToAddrfields(SalesHeader, ShipToAddress);
     end;
 
     local procedure CustomerFields(var SalesHeader: Record "Sales Header")
@@ -1631,6 +1642,7 @@ codeunit 18143 "GST Sales Validation"
         SalesLine.SetFilter(Type, '<>%1', SalesLine.Type::" ");
         if SalesLine.FindSet() then
             repeat
+                TaxTransactionValue.SetCurrentKey("Tax Record ID", "Tax Type");
                 TaxTransactionValue.SetRange("Tax Type", GSTSetup."GST Tax Type");
                 TaxTransactionValue.SetRange("Tax Record ID", SalesLine.RecordId);
                 TaxTransactionValue.SetFilter(Percent, '<>%1', 0);
@@ -1915,6 +1927,7 @@ codeunit 18143 "GST Sales Validation"
     var
         TaxTransactionValue: Record "Tax Transaction Value";
     begin
+        TaxTransactionValue.SetCurrentKey("Tax Record ID", "Tax Type");
         TaxTransactionValue.SetRange("Tax Type", TaxTypeSetupCode);
         TaxTransactionValue.SetRange("Tax Record ID", RecordId);
         TaxTransactionValue.SetFilter(Percent, '<>%1', 0);
@@ -2088,6 +2101,16 @@ codeunit 18143 "GST Sales Validation"
 
     [IntegrationEvent(false, false)]
     local procedure OnValidateShipToCodeForUpdateShipToAddress(var SalesHeader: Record "Sales Header")
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnBeforeShipToAddrfields(var SalesHeader: Record "Sales Header"; ShipToAddress: Record "Ship-to Address"; var IsHandled: Boolean)
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnAfterShipToAddrfields(var SalesHeader: Record "Sales Header"; ShipToAddress: Record "Ship-to Address")
     begin
     end;
 }

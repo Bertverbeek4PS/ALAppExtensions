@@ -5,10 +5,13 @@
 namespace Microsoft.eServices.EDocument;
 
 using System.Utilities;
+using Microsoft.eServices.EDocument.Integration;
+using Microsoft.eServices.EDocument.Processing.Import;
 
 table 6124 "E-Document Log"
 {
     DataClassification = CustomerContent;
+    ReplicateData = false;
 
     fields
     {
@@ -42,10 +45,20 @@ table 6124 "E-Document Log"
         {
             Caption = 'E-Document Status';
         }
+#if not CLEANSCHEMA29
         field(7; "Service Integration"; Enum "E-Document Integration")
         {
-            Caption = 'Integration Code';
+            Caption = 'Service Integration Code';
+            ObsoleteReason = 'Replaced by Service Integration V2.';
+#if CLEAN26
+            ObsoleteState = Removed;
+            ObsoleteTag = '29.0';
+#else
+            ObsoleteState = Pending;
+            ObsoleteTag = '26.0';
+#endif
         }
+#endif
         field(8; "Document Type"; Enum "E-Document Type")
         {
             Caption = 'Document Type';
@@ -56,10 +69,19 @@ table 6124 "E-Document Log"
             Caption = 'Document No.';
             Editable = false;
         }
+        field(10; "Service Integration V2"; Enum "Service Integration")
+        {
+            Caption = 'Service Integration';
+        }
         field(11; "Document Format"; Enum "E-Document Format")
         {
             Caption = 'Document Format';
             DataClassification = SystemMetadata;
+        }
+        field(12; "Processing Status"; Enum "Import E-Doc. Proc. Status")
+        {
+            Caption = 'Processing Status';
+            Editable = false;
         }
     }
 
@@ -74,13 +96,48 @@ table 6124 "E-Document Log"
             IncludedFields = Status;
             MaintainSiftIndex = false;
         }
+#if not CLEANSCHEMA29
         key(Key3; Status, "Service Code", "Document Format", "Service Integration")
         {
+            Clustered = false;
+            ObsoleteReason = 'Replaced by Key4.';
+#if CLEAN26
+            ObsoleteState = Removed;
+            ObsoleteTag = '29.0';
+#else
+            ObsoleteState = Pending;
+            ObsoleteTag = '26.0';
+#endif
+        }
+#endif
+        key(Key4; Status, "Service Code", "Document Format", "Service Integration V2")
+        {
+            Clustered = false;
         }
     }
 
     var
         EDOCLogFileTxt: Label 'E-Document_Log_%1', Locked = true;
+        EDocLogEntryNoExportMsg: Label 'E-Document log entry does not contain data to export.';
+        NonEmptyTempBlobErr: Label 'Temp blob is not empty.';
+
+
+    trigger OnDelete()
+    begin
+        DeleteRelatedDataStorage(Rec."E-Doc. Data Storage Entry No.");
+    end;
+
+    local procedure DeleteRelatedDataStorage(EntryNo: Integer)
+    var
+        EDocDataStorage: Record "E-Doc. Data Storage";
+    begin
+        if EntryNo = 0 then
+            exit;
+
+        EDocDataStorage.SetRange("Entry No.", EntryNo);
+        if not EDocDataStorage.IsEmpty() then
+            EDocDataStorage.DeleteAll(true);
+    end;
 
     internal procedure ExportDataStorage()
     var
@@ -88,6 +145,9 @@ table 6124 "E-Document Log"
         InStr: InStream;
         FileName: Text;
     begin
+        if "E-Doc. Data Storage Entry No." = 0 then
+            Error(EDocLogEntryNoExportMsg);
+
         EDocDataStorage.Get("E-Doc. Data Storage Entry No.");
         EDocDataStorage.CalcFields("Data Storage");
         if not EDocDataStorage."Data Storage".HasValue() then
@@ -101,16 +161,23 @@ table 6124 "E-Document Log"
         DownloadFromStream(InStr, '', '', '', FileName);
     end;
 
-    internal procedure GetDataStorage(var TempBlob: Codeunit "Temp Blob")
+    internal procedure GetDataStorage(var TempBlob: Codeunit "Temp Blob"): Boolean
     var
         EDocDataStorage: Record "E-Doc. Data Storage";
     begin
+        if TempBlob.HasValue() then
+            Error(NonEmptyTempBlobErr);
+        if "E-Doc. Data Storage Entry No." = 0 then
+            exit(false);
         EDocDataStorage.Get("E-Doc. Data Storage Entry No.");
         EDocDataStorage.CalcFields("Data Storage");
         if not EDocDataStorage."Data Storage".HasValue() then
-            exit;
+            exit(false);
 
         TempBlob.FromRecord(EDocDataStorage, EDocDataStorage.FieldNo("Data Storage"));
+        if not TempBlob.HasValue() then
+            exit(false);
+        exit(true);
     end;
 
     internal procedure CanHaveMappingLogs(): Boolean

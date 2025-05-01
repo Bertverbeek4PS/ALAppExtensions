@@ -1,11 +1,13 @@
-﻿// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License. See License.txt in the project root for license information.
 // ------------------------------------------------------------------------------------------------
 namespace Microsoft.Finance.AdvancePayments;
 
 using Microsoft.Bank.BankAccount;
+#if not CLEAN25
 using Microsoft.Bank.Documents;
+#endif
 using Microsoft.Bank.Setup;
 using Microsoft.CRM.BusinessRelation;
 using Microsoft.CRM.Contact;
@@ -17,9 +19,6 @@ using Microsoft.Finance.GeneralLedger.Setup;
 using Microsoft.Finance.ReceivablesPayables;
 using Microsoft.Finance.VAT.Calculation;
 using Microsoft.Finance.VAT.Setup;
-#if not CLEAN23
-using Microsoft.FixedAssets.Journal;
-#endif
 using Microsoft.Foundation.Address;
 using Microsoft.Foundation.Attachment;
 using Microsoft.Foundation.AuditCodes;
@@ -51,13 +50,16 @@ table 31008 "Purch. Adv. Letter Header CZZ"
         field(1; "No."; Code[20])
         {
             Caption = 'No.';
+            OptimizeForTextSearch = true;
             DataClassification = CustomerContent;
 
             trigger OnValidate()
+            var
+                NoSeries: Codeunit "No. Series";
             begin
                 if "No." <> xRec."No." then begin
                     GetSetup();
-                    NoSeriesManagement.TestManual(AdvanceLetterTemplateCZZ."Advance Letter Document Nos.");
+                    NoSeries.TestManual(AdvanceLetterTemplateCZZ."Advance Letter Document Nos.");
                     "No. Series" := '';
                 end;
             end;
@@ -116,6 +118,7 @@ table 31008 "Purch. Adv. Letter Header CZZ"
                 SetPurchaserCode(Vendor."Purchaser Code", "Purchaser Code");
                 Validate("Payment Terms Code");
                 Validate("Payment Method Code");
+                Validate("VAT Bus. Posting Group");
                 Validate("Currency Code");
 
                 Validate("Bank Account Code", Vendor."Preferred Bank Account Code");
@@ -138,6 +141,7 @@ table 31008 "Purch. Adv. Letter Header CZZ"
         field(11; "Pay-to Name"; Text[100])
         {
             Caption = 'Pay-to Name';
+            OptimizeForTextSearch = true;
             DataClassification = CustomerContent;
             TableRelation = Vendor.Name;
             ValidateTableRelation = false;
@@ -394,23 +398,17 @@ table 31008 "Purch. Adv. Letter Header CZZ"
             begin
                 IsHandled := false;
                 OnValidatePostingDateOnBeforeAssignDocumentDate(Rec, xRec, IsHandled);
-                if not IsHandled then
-                    Validate("Document Date", "Posting Date");
+                if not IsHandled then begin
+                    PurchasesPayablesSetup.SetLoadFields("Link Doc. Date To Posting Date");
+                    PurchasesPayablesSetup.GetRecordOnce();
+
+                    if ("Incoming Document Entry No." = 0) and PurchasesPayablesSetup."Link Doc. Date To Posting Date" then
+                        ValidateDocumentDateWithPostingDate();
+                end;
 
                 GetSetup();
-#if not CLEAN22
-#pragma warning disable AL0432
-                if not ReplaceVATDateMgtCZL.IsEnabled() then begin
-                    if PurchasesPayablesSetup."Default VAT Date CZL" = PurchasesPayablesSetup."Default VAT Date CZL"::"Posting Date" then
-                        Validate("VAT Date", "Posting Date");
-                end else begin
-#pragma warning restore AL0432
-#endif
-                    GeneralLedgerSetup.UpdateVATDate("Posting Date", Enum::"VAT Reporting Date"::"Posting Date", "VAT Date");
-                    Validate("VAT Date");
-#if not CLEAN22
-                end;
-#endif
+                GeneralLedgerSetup.UpdateVATDate("Posting Date", Enum::"VAT Reporting Date"::"Posting Date", "VAT Date");
+                Validate("VAT Date");
                 GeneralLedgerSetup.UpdateOriginalDocumentVATDateCZL("Posting Date", Enum::"Default Orig.Doc. VAT Date CZL"::"Posting Date", "Original Document VAT Date");
                 Validate("Original Document VAT Date");
 
@@ -436,19 +434,9 @@ table 31008 "Purch. Adv. Letter Header CZZ"
                 Validate("Payment Terms Code");
 
                 GetSetup();
-#if not CLEAN22
-#pragma warning disable AL0432
-                if not ReplaceVATDateMgtCZL.IsEnabled() then begin
-                    if PurchasesPayablesSetup."Default VAT Date CZL" = PurchasesPayablesSetup."Default VAT Date CZL"::"Document Date" then
-                        Validate("VAT Date", "Document Date");
-                end else begin
-#pragma warning restore AL0432
-#endif
-                    GeneralLedgerSetup.UpdateVATDate("Document Date", Enum::"VAT Reporting Date"::"Document Date", "VAT Date");
-                    Validate("VAT Date");
-#if not CLEAN22
-                end;
-#endif
+                if GeneralLedgerSetup."VAT Reporting Date" = GeneralLedgerSetup."VAT Reporting Date"::"Document Date" then
+                    Validate("VAT Date", "Document Date");
+
                 GeneralLedgerSetup.UpdateOriginalDocumentVATDateCZL("Document Date", Enum::"Default Orig.Doc. VAT Date CZL"::"Document Date", "Original Document VAT Date");
                 Validate("Original Document VAT Date");
             end;
@@ -529,6 +517,7 @@ table 31008 "Purch. Adv. Letter Header CZZ"
         field(50; "Vendor Adv. Letter No."; Code[35])
         {
             Caption = 'Vendor Advance Letter No.';
+            OptimizeForTextSearch = true;
             DataClassification = CustomerContent;
         }
         field(53; "No. Series"; Code[20])
@@ -581,12 +570,14 @@ table 31008 "Purch. Adv. Letter Header CZZ"
         field(58; "Specific Symbol"; Code[10])
         {
             Caption = 'Specific Symbol';
+            OptimizeForTextSearch = true;
             DataClassification = CustomerContent;
             CharAllowed = '09';
         }
         field(59; "Variable Symbol"; Code[10])
         {
             Caption = 'Variable Symbol';
+            OptimizeForTextSearch = true;
             DataClassification = CustomerContent;
             CharAllowed = '09';
 
@@ -598,6 +589,7 @@ table 31008 "Purch. Adv. Letter Header CZZ"
         field(60; "Constant Symbol"; Code[10])
         {
             Caption = 'Constant Symbol';
+            OptimizeForTextSearch = true;
             DataClassification = CustomerContent;
             CharAllowed = '09';
             TableRelation = "Constant Symbol CZL";
@@ -804,13 +796,18 @@ table 31008 "Purch. Adv. Letter Header CZZ"
                     IncomingDocument.SetPurchaseAdvanceCZZ(Rec);
             end;
         }
+#if not CLEAN25
         field(31040; "Amount on Iss. Payment Order"; Decimal)
         {
             Caption = 'Amount on Issued Payment Order';
             FieldClass = FlowField;
             CalcFormula = sum("Iss. Payment Order Line CZB".Amount where("Purch. Advance Letter No. CZZ" = field("No.")));
             Editable = false;
+            ObsoleteState = Pending;
+            ObsoleteReason = 'This field is obsolete and will be removed in a future release. The CalcSuggestedAmountToApply function should be used instead.';
+            ObsoleteTag = '25.0';
         }
+#endif
         field(31112; "Original Document VAT Date"; Date)
         {
             Caption = 'Original Document VAT Date';
@@ -850,14 +847,8 @@ table 31008 "Purch. Adv. Letter Header CZZ"
         GeneralLedgerSetup: Record "General Ledger Setup";
         SalespersonPurchaser: Record "Salesperson/Purchaser";
         ResponsibilityCenter: Record "Responsibility Center";
-        NoSeriesManagement: Codeunit NoSeriesManagement;
         DimensionManagement: Codeunit DimensionManagement;
         UserSetupManagement: Codeunit "User Setup Management";
-#if not CLEAN22
-#pragma warning disable AL0432
-        ReplaceVATDateMgtCZL: Codeunit "Replace VAT Date Mgt. CZL";
-#pragma warning restore AL0432
-#endif
         VATReportingDateMgt: Codeunit "VAT Reporting Date Mgt";
         HasPurchSetup: Boolean;
         HideValidationDialog: Boolean;
@@ -865,6 +856,7 @@ table 31008 "Purch. Adv. Letter Header CZZ"
         ConfirmChangeQst: Label 'Do you want to change %1?', Comment = '%1 = a Field Caption like Currency Code';
         DocumentResetErr: Label 'You cannot reset %1 because the document still has one or more lines.', Comment = '%1 = a Field Caption like Bill-to Contact No.';
         DocumentDeleteErr: Label 'You cannot delete this document. Your identification is set up to process from %1 %2 only.', Comment = '%1 = table caption of responsibility center, %2 = code of responsibility center';
+        PostedEntriesExistErr: Label 'You cannot delete this document because there are posted entries.';
 
     trigger OnInsert()
     begin
@@ -886,15 +878,21 @@ table 31008 "Purch. Adv. Letter Header CZZ"
               DocumentDeleteErr,
               ResponsibilityCenter.TableCaption(), UserSetupManagement.GetPurchasesFilter());
 
+        PurchAdvLetterEntryCZZ.SetRange("Purch. Adv. Letter No.", "No.");
+        PurchAdvLetterEntryCZZ.SetFilter("Entry Type", '<>%1', PurchAdvLetterEntryCZZ."Entry Type"::"Initial Entry");
+        if not PurchAdvLetterEntryCZZ.IsEmpty() then
+            Error(PostedEntriesExistErr);
+
         PurchAdvLetterLineCZZ.SetRange("Document No.", "No.");
         if not PurchAdvLetterLineCZZ.IsEmpty() then
             PurchAdvLetterLineCZZ.DeleteAll(true);
 
+        PurchAdvLetterEntryCZZ.Reset();
         PurchAdvLetterEntryCZZ.SetRange("Purch. Adv. Letter No.", "No.");
         if not PurchAdvLetterEntryCZZ.IsEmpty() then
             PurchAdvLetterEntryCZZ.DeleteAll();
 
-        AdvanceLetterApplicationCZZ.SetRange("Advance Letter Type", AdvanceLetterApplicationCZZ."Advance Letter Type"::Sales);
+        AdvanceLetterApplicationCZZ.SetRange("Advance Letter Type", AdvanceLetterApplicationCZZ."Advance Letter Type"::Purchase);
         AdvanceLetterApplicationCZZ.SetRange("Advance Letter No.", "No.");
         if not AdvanceLetterApplicationCZZ.IsEmpty() then
             AdvanceLetterApplicationCZZ.DeleteAll();
@@ -909,17 +907,20 @@ table 31008 "Purch. Adv. Letter Header CZZ"
     end;
 
     procedure AssistEdit(): Boolean
+    var
+        NoSeries: Codeunit "No. Series";
     begin
         GetSetup();
         AdvanceLetterTemplateCZZ.TestField("Advance Letter Document Nos.");
-        if NoSeriesManagement.SelectSeries(AdvanceLetterTemplateCZZ."Advance Letter Document Nos.", xRec."No. Series", "No. Series") then begin
-            NoSeriesManagement.SetSeries("No.");
+        if NoSeries.LookupRelatedNoSeries(AdvanceLetterTemplateCZZ."Advance Letter Document Nos.", xRec."No. Series", "No. Series") then begin
+            "No." := NoSeries.GetNextNo("No. Series");
             exit(true);
         end;
     end;
 
     procedure InitInsert()
     var
+        NoSeries: Codeunit "No. Series";
         IsHandled: Boolean;
     begin
         IsHandled := false;
@@ -928,9 +929,11 @@ table 31008 "Purch. Adv. Letter Header CZZ"
             if "No." = '' then begin
                 GetSetup();
                 AdvanceLetterTemplateCZZ.TestField("Advance Letter Document Nos.");
-                NoSeriesManagement.InitSeries(AdvanceLetterTemplateCZZ."Advance Letter Document Nos.", xRec."No. Series", "Posting Date", "No.", "No. Series")
+                    "No. Series" := AdvanceLetterTemplateCZZ."Advance Letter Document Nos.";
+                    if NoSeries.AreRelated("No. Series", xRec."No. Series") then
+                        "No. Series" := xRec."No. Series";
+                    "No." := NoSeries.GetNextNo("No. Series", "Posting Date");
             end;
-
         OnInitInsertOnBeforeInitRecord(Rec, xRec);
         InitRecord();
     end;
@@ -950,20 +953,6 @@ table 31008 "Purch. Adv. Letter Header CZZ"
             "Posting Date" := 0D;
 
         "Document Date" := WorkDate();
-#if not CLEAN22
-#pragma warning disable AL0432
-        if not ReplaceVATDateMgtCZL.IsEnabled() then
-            case PurchasesPayablesSetup."Default VAT Date CZL" of
-                PurchasesPayablesSetup."Default VAT Date CZL"::"Posting Date":
-                    "VAT Date" := "Posting Date";
-                PurchasesPayablesSetup."Default VAT Date CZL"::"Document Date":
-                    "VAT Date" := "Document Date";
-                PurchasesPayablesSetup."Default VAT Date CZL"::Blank:
-                    "VAT Date" := 0D;
-            end
-        else
-#pragma warning restore AL0432
-#endif
         "VAT Date" := GeneralLedgerSetup.GetVATDate("Posting Date", "Document Date");
         "Original Document VAT Date" :=
             GeneralLedgerSetup.GetOriginalDocumentVATDateCZL("Posting Date", "VAT Date", "Document Date");
@@ -1060,38 +1049,6 @@ table 31008 "Purch. Adv. Letter Header CZZ"
         exit((not HasPayToAddress()) and PayToVendor.HasAddress());
     end;
 
-#if not CLEAN23
-#pragma warning disable AL0432
-    [Obsolete('Temporary fix to convert Dim Arrays to Dictionary', '23.0')]
-    local procedure CreateDefaultDimSourcesFromDimArray(var DefaultDimSource: List of [Dictionary of [Integer, Code[20]]]; TableID: array[10] of Integer; No: array[10] of Code[20])
-    var
-        DimArrayConversionHelper: Codeunit "Dim. Array Conversion Helper";
-    begin
-        DimArrayConversionHelper.CreateDefaultDimSourcesFromDimArray(Database::"FA Journal Line", DefaultDimSource, TableID, No);
-    end;
-
-    [Obsolete('Temporary fix to convert Dim Arrays to Dictionary', '23.0')]
-    local procedure CreateDimTableIDs(DefaultDimSource: List of [Dictionary of [Integer, Code[20]]]; var TableID: array[10] of Integer; var No: array[10] of Code[20])
-    var
-        DimArrayConversionHelper: Codeunit "Dim. Array Conversion Helper";
-    begin
-        DimArrayConversionHelper.CreateDimTableIDs(Database::"FA Journal Line", DefaultDimSource, TableID, No);
-    end;
-
-    [Obsolete('Temporary fix to convert Dim Arrays to Dictionary', '23.0')]
-    local procedure RunEventOnAfterCreateDimTableIDs(var DefaultDimSource: List of [Dictionary of [Integer, Code[20]]])
-    var
-        DimArrayConversionHelper: Codeunit "Dim. Array Conversion Helper";
-        TableID: array[10] of Integer;
-        No: array[10] of Code[20];
-    begin
-        CreateDimTableIDs(DefaultDimSource, TableID, No);
-        OnAfterCreateDimTableIDs(Rec, CurrFieldNo, TableID, No);
-        CreateDefaultDimSourcesFromDimArray(DefaultDimSource, TableID, No);
-    end;
-#pragma warning restore AL0432
-
-#endif
     procedure CreateDimFromDefaultDim(FieldNo: Integer)
     var
         DefaultDimSource: List of [Dictionary of [Integer, Code[20]]];
@@ -1106,11 +1063,6 @@ table 31008 "Purch. Adv. Letter Header CZZ"
         DimensionManagement.AddDimSource(DefaultDimSource, Database::"Salesperson/Purchaser", Rec."Purchaser Code", FieldNo = Rec.FieldNo("Purchaser Code"));
         DimensionManagement.AddDimSource(DefaultDimSource, Database::"Responsibility Center", Rec."Responsibility Center", FieldNo = Rec.FieldNo("Responsibility Center"));
 
-#if not CLEAN23
-#pragma warning disable AL0432
-        RunEventOnAfterCreateDimTableIDs(DefaultDimSource);
-#pragma warning restore AL0432
-#endif
         OnAfterInitDefaultDimensionSources(Rec, DefaultDimSource);
     end;
 
@@ -1265,7 +1217,8 @@ table 31008 "Purch. Adv. Letter Header CZZ"
             Modify();
 
         if OldDimSetID <> "Dimension Set ID" then
-            Modify();
+            if not IsNullGuid(Rec.SystemId) then
+                Modify();
 
         OnAfterValidateShortcutDimCode(Rec, xRec, FieldNumber, ShortcutDimCode);
     end;
@@ -1314,6 +1267,7 @@ table 31008 "Purch. Adv. Letter Header CZZ"
                 PurchAdvLetterLineCZZ.Init();
                 PurchAdvLetterLineCZZ."Document No." := "No.";
                 PurchAdvLetterLineCZZ."Line No." += 10000;
+                PurchAdvLetterLineCZZ."VAT Bus. Posting Group" := "VAT Bus. Posting Group";
                 PurchAdvLetterLineCZZ.Validate("VAT Prod. Posting Group", TempPurchAdvLetterLineCZZ."VAT Prod. Posting Group");
                 PurchAdvLetterLineCZZ.Description := TempPurchAdvLetterLineCZZ.Description;
                 PurchAdvLetterLineCZZ.Validate("Amount Including VAT", TempPurchAdvLetterLineCZZ."Amount Including VAT");
@@ -1484,6 +1438,7 @@ table 31008 "Purch. Adv. Letter Header CZZ"
     begin
         PurchAdvLetterEntryCZZ.SetRange("Purch. Adv. Letter No.", "No.");
         PurchAdvLetterEntryCZZ.SetRange(Cancelled, false);
+        PurchAdvLetterEntryCZZ.SetRange("Auxiliary Entry", false);
         PurchAdvLetterEntryCZZ.SetFilter("Entry Type", '<>%1', PurchAdvLetterEntryCZZ."Entry Type"::"Initial Entry");
         PurchAdvLetterEntryCZZ.CalcSums("VAT Base Amount", "VAT Amount", "VAT Base Amount (LCY)", "VAT Amount (LCY)");
         VATBaseAmount := PurchAdvLetterEntryCZZ."VAT Base Amount";
@@ -1592,18 +1547,32 @@ table 31008 "Purch. Adv. Letter Header CZZ"
         ApprovalsMgmt.OnDeleteRecordInApprovalRequest(RecordId);
     end;
 
+    procedure CollectSuggestedApplication(var CrossApplicationBufferCZL: Record "Cross Application Buffer CZL"): Boolean
+    var
+        CrossApplicationMgtCZL: Codeunit "Cross Application Mgt. CZL";
+    begin
+        exit(CrossApplicationMgtCZL.CollectSuggestedApplication(Rec, CrossApplicationBufferCZL));
+    end;
+
+    procedure CollectSuggestedApplication(CalledFrom: Variant; var CrossApplicationBufferCZL: Record "Cross Application Buffer CZL"): Boolean
+    var
+        CrossApplicationMgtCZL: Codeunit "Cross Application Mgt. CZL";
+    begin
+        exit(CrossApplicationMgtCZL.CollectSuggestedApplication(Rec, CalledFrom, CrossApplicationBufferCZL));
+    end;
+
     procedure CalcSuggestedAmountToApply(): Decimal
     var
         CrossApplicationMgtCZL: Codeunit "Cross Application Mgt. CZL";
     begin
-        exit(CrossApplicationMgtCZL.CalcSuggestedAmountToApplyPurchAdvLetterHeader(Rec."No."));
+        exit(-CrossApplicationMgtCZL.CalcSuggestedAmountToApply(Rec));
     end;
 
     procedure DrillDownSuggestedAmountToApply()
     var
         CrossApplicationMgtCZL: Codeunit "Cross Application Mgt. CZL";
     begin
-        CrossApplicationMgtCZL.DrillDownSuggestedAmountToApplyPurchAdvLetterHeader(Rec."No.");
+        CrossApplicationMgtCZL.DrillDownSuggestedAmountToApply(Rec);
     end;
 
     internal procedure PerformManualRelease(var PurchAdvLetterHeaderCZZ: Record "Purch. Adv. Letter Header CZZ")
@@ -1628,6 +1597,39 @@ table 31008 "Purch. Adv. Letter Header CZZ"
         PurchAdvLetterHeaderCZZ.SetRange(Status, PurchAdvLetterHeaderCZZ.Status::"To Pay");
         NoOfSkipped := NoOfSelected - PurchAdvLetterHeaderCZZ.Count();
         BatchProcessingMgt.BatchProcess(PurchAdvLetterHeaderCZZ, Codeunit::"P.Adv.Let.Doc.Man.Reopen CZZ", "Error Handling Options"::"Show Error", NoOfSelected, NoOfSkipped);
+    end;
+
+    local procedure ValidateDocumentDateWithPostingDate()
+    var
+        IsHandled: Boolean;
+    begin
+        IsHandled := false;
+        OnBeforeValidateDocumentDateWithPostingDate(Rec, CurrFieldNo, IsHandled, xRec);
+        if IsHandled then
+            exit;
+
+        Validate("Document Date", "Posting Date");
+    end;
+
+    procedure UpdateStatus(AdvanceLetterDocStatus: Enum "Advance Letter Doc. Status CZZ")
+    var
+        PurchAdvLetterManagementCZZ: Codeunit "PurchAdvLetterManagement CZZ";
+    begin
+        PurchAdvLetterManagementCZZ.UpdateStatus(Rec, AdvanceLetterDocStatus);
+    end;
+
+    procedure CopyDocument()
+    var
+        CopyAdvLetterDocumentCZZ: Report "Copy Adv. Letter Document CZZ";
+        IsHandled: Boolean;
+    begin
+        IsHandled := false;
+        OnBeforeCopyDocument(Rec, IsHandled);
+        if IsHandled then
+            exit;
+
+        CopyAdvLetterDocumentCZZ.SetPurchAdvLetterHeader(Rec);
+        CopyAdvLetterDocumentCZZ.RunModal();
     end;
 
     [IntegrationEvent(false, false)]
@@ -1680,16 +1682,6 @@ table 31008 "Purch. Adv. Letter Header CZZ"
     begin
     end;
 
-#if not CLEAN23
-#pragma warning disable AL0432
-    [Obsolete('Use OnAfterInitDefaultDimensionSources instead.', '23.0')]
-    [IntegrationEvent(false, false)]
-    local procedure OnAfterCreateDimTableIDs(var PurchAdvLetterHeaderCZZ: Record "Purch. Adv. Letter Header CZZ"; CallingFieldNo: Integer; var TableID: array[10] of Integer; var No: array[10] of Code[20])
-    begin
-    end;
-#pragma warning restore AL0432
-
-#endif
     [IntegrationEvent(false, false)]
     local procedure OnAfterUpdatePayToCont(var PurchAdvLetterHeaderCZZ: Record "Purch. Adv. Letter Header CZZ"; Vendor: Record Vendor; Contact: Record Contact)
     begin
@@ -1807,6 +1799,16 @@ table 31008 "Purch. Adv. Letter Header CZZ"
 
     [IntegrationEvent(false, false)]
     local procedure OnBeforeSetSecurityFilterOnRespCenter(var PurchAdvLetterHeaderCZZ: Record "Purch. Adv. Letter Header CZZ"; var IsHandled: Boolean)
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnBeforeValidateDocumentDateWithPostingDate(var PurchAdvLetterHeaderCZZ: Record "Purch. Adv. Letter Header CZZ"; CurrFieldNo: Integer; var IsHandled: Boolean; xPurchAdvLetterHeaderCZZ: Record "Purch. Adv. Letter Header CZZ")
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnBeforeCopyDocument(var PurchAdvLetterHeaderCZZ: Record "Purch. Adv. Letter Header CZZ"; var IsHandled: Boolean)
     begin
     end;
 }

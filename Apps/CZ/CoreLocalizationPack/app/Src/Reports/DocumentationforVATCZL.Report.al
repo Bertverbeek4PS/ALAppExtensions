@@ -1,4 +1,4 @@
-﻿// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License. See License.txt in the project root for license information.
 // ------------------------------------------------------------------------------------------------
@@ -11,12 +11,11 @@ using System.Utilities;
 
 report 11757 "Documentation for VAT CZL"
 {
-    DefaultLayout = RDLC;
-    RDLCLayout = './Src/Reports/DocumentationForVAT.rdl';
     ApplicationArea = Basic, Suite;
     Caption = 'Documentation for VAT';
     UsageCategory = ReportsAndAnalysis;
     PreviewMode = PrintLayout;
+    DefaultRenderingLayout = "DocumentationForVAT.rdl";
 
     dataset
     {
@@ -30,14 +29,6 @@ report 11757 "Documentation for VAT CZL"
             column(CompanyName; CompanyProperty.DisplayName())
             {
             }
-#if not CLEAN24
-            column(UseAmtsInAddCurr; UseAmtsInAddCurr)
-            {
-                ObsoleteState = Pending;
-                ObsoleteTag = '24.0';
-                ObsoleteReason = 'This column is not used and will be removed in a future version.';
-            }
-#endif
             column(PrintVATEntries; PrintVATEntries)
             {
             }
@@ -75,6 +66,30 @@ report 11757 "Documentation for VAT CZL"
             {
             }
             column(VATAmountReverseChargeVAT; VATAmountReverseChargeVATTotal[1])
+            {
+            }
+            column(VATBase2; VATBaseTotal[2])
+            {
+            }
+            column(VATAmount2; VATAmountTotal[2])
+            {
+            }
+            column(VATBaseSale2; VATBaseSaleTotal[2])
+            {
+            }
+            column(VATAmountSale2; VATAmountSaleTotal[2])
+            {
+            }
+            column(VATBasePurch2; VATBasePurchTotal[2])
+            {
+            }
+            column(VATAmountPurch2; VATAmountPurchTotal[2])
+            {
+            }
+            column(VATBaseReverseChargeVAT2; VATBaseReverseChargeVATTotal[2])
+            {
+            }
+            column(VATAmountReverseChargeVAT2; VATAmountReverseChargeVATTotal[2])
             {
             }
             column(Selection; Selection)
@@ -118,6 +133,14 @@ report 11757 "Documentation for VAT CZL"
                     column(CalculatedVATAmount; Amount)
                     {
                     }
+                    column(OriginalVATBase_VATEntry; "Original VAT Base CZL")
+                    {
+                        IncludeCaption = true;
+                    }
+                    column(OriginalVATAmount_VATEntry; "Original VAT Amount CZL")
+                    {
+                        IncludeCaption = true;
+                    }
                     column(VATCalcType_VATEntry; "VAT Calculation Type")
                     {
                         IncludeCaption = true;
@@ -134,32 +157,6 @@ report 11757 "Documentation for VAT CZL"
                     {
                         IncludeCaption = true;
                     }
-#if not CLEAN24
-                    column(AddCurrUnrlzdAmt_VATEntry; "Add.-Currency Unrealized Amt.")
-                    {
-                        ObsoleteState = Pending;
-                        ObsoleteTag = '24.0';
-                        ObsoleteReason = 'This column is not used and will be removed in a future version.';
-                    }
-                    column(AddCurrUnrlzdBas_VATEntry; "Add.-Currency Unrealized Base")
-                    {
-                        ObsoleteState = Pending;
-                        ObsoleteTag = '24.0';
-                        ObsoleteReason = 'This column is not used and will be removed in a future version.';
-                    }
-                    column(AdditionlCurrAmt_VATEntry; "Additional-Currency Amount")
-                    {
-                        ObsoleteState = Pending;
-                        ObsoleteTag = '24.0';
-                        ObsoleteReason = 'This column is not used and will be removed in a future version.';
-                    }
-                    column(AdditinlCurrBase_VATEntry; "Additional-Currency Base")
-                    {
-                        ObsoleteState = Pending;
-                        ObsoleteTag = '24.0';
-                        ObsoleteReason = 'This column is not used and will be removed in a future version.';
-                    }
-#endif
                     column(VATRegistrationNo_VATEntry; "VAT Registration No.")
                     {
                         IncludeCaption = true;
@@ -180,6 +177,12 @@ report 11757 "Documentation for VAT CZL"
                         column(CountrySubAmount; CountrySubTotalAmt[2])
                         {
                         }
+                        column(CountrySubOriginalBase; CountrySubTotalAmt[3])
+                        {
+                        }
+                        column(CountrySubOriginalAmount; CountrySubTotalAmt[4])
+                        {
+                        }
                         column(CountrySubTotalPrint; PrintCountrySubTotal)
                         {
                         }
@@ -197,6 +200,8 @@ report 11757 "Documentation for VAT CZL"
 
                             CountrySubTotalAmt[1] += "VAT Entry".Base;
                             CountrySubTotalAmt[2] += "VAT Entry".Amount;
+                            CountrySubTotalAmt[3] += "VAT Entry"."Original VAT Base CZL";
+                            CountrySubTotalAmt[4] += "VAT Entry"."Original VAT Amount CZL";
 
                             SetRange(Number, 0);
                             VATEntryLocal := "VAT Entry";
@@ -212,14 +217,10 @@ report 11757 "Documentation for VAT CZL"
                     }
                     trigger OnAfterGetRecord()
                     begin
-#if not CLEAN22
-#pragma warning disable AL0432
-                        if not IsReplaceVATDateEnabled() then
-                            "VAT Reporting Date" := "VAT Date CZL";
-#pragma warning restore AL0432
-#endif
-                        VATEntrySubtotalAmt[1] += "VAT Entry".Base;
-                        VATEntrySubtotalAmt[2] += "VAT Entry".Amount;
+                        VATEntrySubtotalAmt[1] += Base;
+                        VATEntrySubtotalAmt[2] += Amount;
+                        VATEntrySubtotalAmt[3] += "Original VAT Base CZL";
+                        VATEntrySubtotalAmt[4] += "Original VAT Amount CZL";
 
                         case "VAT Posting Setup"."VAT Calculation Type" of
                             "VAT Posting Setup"."VAT Calculation Type"::"Normal VAT",
@@ -254,34 +255,18 @@ report 11757 "Documentation for VAT CZL"
                     column(VATEntryTotalCaption; StrSubstNo(TotalPerTxt, "VAT Posting Setup"."VAT Bus. Posting Group", "VAT Posting Setup"."VAT Prod. Posting Group", VATEntry.GetFilter(Type)))
                     {
                     }
-#if not CLEAN24
-                    column(VATEntryTotalWithRevChrgVATCaption; StrSubstNo(VATEntryTotalWithRevChrgVATTxt, "VAT Posting Setup"."VAT Bus. Posting Group", "VAT Posting Setup"."VAT Prod. Posting Group", VATEntry.GetFilter(Type)))
-                    {
-                        ObsoleteState = Pending;
-                        ObsoleteTag = '24.0';
-                        ObsoleteReason = 'This column is not used and will be removed in a future version.';
-                    }
-#endif
                     column(VATEntrySumCalculatedBase; VATEntrySubtotalAmt[1])
                     {
                     }
                     column(VATEntrySumCalculatedAmount; VATEntrySubtotalAmt[2])
                     {
                     }
-#if not CLEAN24
-                    column(VATEntrySumAddCurrBase; VATEntrySubtotalAmt[3])
+                    column(VATEntrySumOriginalBase; VATEntrySubtotalAmt[3])
                     {
-                        ObsoleteState = Pending;
-                        ObsoleteTag = '24.0';
-                        ObsoleteReason = 'This column is not used and will be removed in a future version.';
                     }
-                    column(VATEntrySumAddCurrAmount; VATEntrySubtotalAmt[4])
+                    column(VATEntrySumOriginalAmount; VATEntrySubtotalAmt[4])
                     {
-                        ObsoleteState = Pending;
-                        ObsoleteTag = '24.0';
-                        ObsoleteReason = 'This column is not used and will be removed in a future version.';
                     }
-#endif
                 }
                 trigger OnAfterGetRecord()
                 begin
@@ -298,13 +283,6 @@ report 11757 "Documentation for VAT CZL"
                         else
                             VATEntry.SetRange(Closed);
                     end;
-#if not CLEAN22
-#pragma warning disable AL0432
-                    if not VATEntry.IsReplaceVATDateEnabled() then
-                        VATEntry.SetFilter("VAT Date CZL", VATDateFilter)
-                    else
-#pragma warning restore AL0432
-#endif
                     VATEntry.SetFilter("VAT Reporting Date", VATDateFilter);
                     VATEntry.SetRange("VAT Bus. Posting Group", "VAT Posting Setup"."VAT Bus. Posting Group");
                     VATEntry.SetRange("VAT Prod. Posting Group", "VAT Posting Setup"."VAT Prod. Posting Group");
@@ -373,14 +351,10 @@ report 11757 "Documentation for VAT CZL"
                                 VATEntry.Amount := VATEntry."Additional-Currency Amount";
                             end;
 
+                            if VATEntry."Original VAT Entry No. CZL" <> 0 then
+                                VATEntry.Base := VATEntry.CalcDeductibleVATBaseCZL();
+
                             if MergeByDocumentNo then begin
-#if not CLEAN22
-#pragma warning disable AL0432
-                                if not VATEntry.IsReplaceVATDateEnabled() then
-                                    "VAT Entry".SetRange("VAT Date CZL", VATEntry."VAT Date CZL")
-                                else
-#pragma warning restore AL0432
-#endif
                                 "VAT Entry".SetRange("VAT Reporting Date", VATEntry."VAT Reporting Date");
                                 "VAT Entry".SetRange("VAT Bus. Posting Group", VATEntry."VAT Bus. Posting Group");
                                 "VAT Entry".SetRange("VAT Prod. Posting Group", VATEntry."VAT Prod. Posting Group");
@@ -396,6 +370,10 @@ report 11757 "Documentation for VAT CZL"
                             end else begin
                                 "VAT Entry".Base += VATEntry.Base;
                                 "VAT Entry".Amount += VATEntry.Amount;
+                                "VAT Entry"."Non-Deductible VAT Base" += VATEntry."Non-Deductible VAT Base";
+                                "VAT Entry"."Non-Deductible VAT Amount" += VATEntry."Non-Deductible VAT Amount";
+                                "VAT Entry"."Original VAT Base CZL" += VATEntry."Original VAT Base CZL";
+                                "VAT Entry"."Original VAT Amount CZL" += VATEntry."Original VAT Amount CZL";
                                 "VAT Entry".Modify();
                             end;
                         until VATEntry.Next() = 0;
@@ -499,6 +477,24 @@ report 11757 "Documentation for VAT CZL"
         }
     }
 
+    rendering
+    {
+        layout("DocumentationForVAT.rdl")
+        {
+            Type = RDLC;
+            LayoutFile = './Src/Reports/DocumentationForVAT.rdl';
+            Caption = 'Documentation For VAT (RDL)';
+            Summary = 'The Documentation For VAT (RDL) provides a detailed layout.';
+        }
+        layout("DocumentationForVAT.xlsx")
+        {
+            Type = Excel;
+            LayoutFile = './Src/Reports/DocumentationForVAT.xlsx';
+            Caption = 'Documentation For VAT (Excel)';
+            Summary = 'The Documentation For VAT (Excel) provides a detailed layout.';
+        }
+    }
+
     labels
     {
         ReportCaptionLbl = 'Documentation for VAT';
@@ -515,25 +511,11 @@ report 11757 "Documentation for VAT CZL"
     begin
         if "VAT Posting Setup".GetFilters() <> '' then
             VATPostingSetupFilter := "VAT Posting Setup".TableCaption() + ': ' + "VAT Posting Setup".GetFilters();
-#if not CLEAN22
-#pragma warning disable AL0432
-        if not VATEntry.IsReplaceVATDateEnabled() then begin
-            if EndDateReq = 0D then
-                VATEntry.SetFilter("VAT Date CZL", '%1..', StartDateReq)
-            else
-                VATEntry.SetRange("VAT Date CZL", StartDateReq, EndDateReq);
-            VATDateFilter := VATEntry.GetFilter("VAT Date CZL");
-        end else begin
-#pragma warning restore AL0432
-#endif
-            if EndDateReq = 0D then
-                VATEntry.SetFilter("VAT Reporting Date", '%1..', StartDateReq)
-            else
-                VATEntry.SetRange("VAT Reporting Date", StartDateReq, EndDateReq);
-            VATDateFilter := VATEntry.GetFilter("VAT Reporting Date");
-#if not CLEAN22
-        end;
-#endif
+        if EndDateReq = 0D then
+            VATEntry.SetFilter("VAT Reporting Date", '%1..', StartDateReq)
+        else
+            VATEntry.SetRange("VAT Reporting Date", StartDateReq, EndDateReq);
+        VATDateFilter := VATEntry.GetFilter("VAT Reporting Date");
     end;
 
     var
@@ -551,9 +533,6 @@ report 11757 "Documentation for VAT CZL"
         CurrencyTxt: Label 'All amounts are in %1', Comment = '%1 = Currency Code';
         TotalPerTxt: Label 'Total for %1 %2 %3', Comment = '%1 = VAT Bus. Posting Group; %2 = VAT Prod. Posting Group; %3 = Type';
         CountrySubtotalCaptionTxt: Label 'Total for Country/Region %1', Comment = '%1 = Country Code';
-#if not CLEAN24
-        VATEntryTotalWithRevChrgVATTxt: Label 'Total for %1 %2 %3 with Reverse Charge VAT', Comment = '%1 = VAT Bus. Posting Group, %2 = VAT Prod. Posting Group, %3 = VAT Entry Type';
-#endif
 
     procedure InitializeRequest(NewStartDate: Date; NewEndDate: Date; NewPrintVATEntries: Boolean; NewUseAmtsInAddCurr: Boolean)
     begin
@@ -571,22 +550,22 @@ report 11757 "Documentation for VAT CZL"
                 begin
                     VATBasePurchTotal[1] += VATEntry.Base;
                     VATAmountPurchTotal[1] += VATEntry.Amount;
-                    VATBasePurchTotal[2] += VATEntry.Base;
-                    VATAmountPurchTotal[2] += VATEntry.Amount;
+                    VATBasePurchTotal[2] += VATEntry."Original VAT Base CZL";
+                    VATAmountPurchTotal[2] += VATEntry."Original VAT Amount CZL";
 
                     if VATEntry."VAT Calculation Type" = VATEntry."VAT Calculation Type"::"Reverse Charge VAT" then begin
-                        VATBaseReverseChargeVATTotal[1] -= VATEntry.Base;
-                        VATAmountReverseChargeVATTotal[1] -= VATEntry.Amount;
-                        VATBaseReverseChargeVATTotal[2] -= VATEntry.Base;
-                        VATAmountReverseChargeVATTotal[2] -= VATEntry.Amount;
+                        VATBaseReverseChargeVATTotal[1] -= VATEntry."Original VAT Base CZL";
+                        VATAmountReverseChargeVATTotal[1] -= VATEntry."Original VAT Amount CZL";
+                        VATBaseReverseChargeVATTotal[2] -= VATEntry."Original VAT Base CZL";
+                        VATAmountReverseChargeVATTotal[2] -= VATEntry."Original VAT Amount CZL";
                     end;
                 end;
             VATEntry.Type::Sale:
                 begin
                     VATBaseSaleTotal[1] += VATEntry.Base;
                     VATAmountSaleTotal[1] += VATEntry.Amount;
-                    VATBaseSaleTotal[2] += VATEntry.Base;
-                    VATAmountSaleTotal[2] += VATEntry.Amount;
+                    VATBaseSaleTotal[2] += VATEntry."Original VAT Base CZL";
+                    VATAmountSaleTotal[2] += VATEntry."Original VAT Amount CZL";
                 end;
         end;
 

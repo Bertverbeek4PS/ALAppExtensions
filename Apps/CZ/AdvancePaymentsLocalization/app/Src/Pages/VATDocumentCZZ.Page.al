@@ -6,14 +6,9 @@ namespace Microsoft.Finance.AdvancePayments;
 
 using Microsoft.Finance.Currency;
 using Microsoft.Finance.GeneralLedger.Setup;
-#if not CLEAN22
-using Microsoft.Finance.VAT.Calculation;
-using Microsoft.Sales.Setup;
-using Microsoft.Purchases.Setup;
-#endif
 using Microsoft.Foundation.NoSeries;
 
-# pragma warning disable AW0006
+#pragma warning disable AW0006
 page 31185 "VAT Document CZZ"
 {
     PageType = StandardDialog;
@@ -37,17 +32,15 @@ page 31185 "VAT Document CZZ"
                     trigger OnValidate()
                     begin
                         if DocumentNo <> InitDocumentNo then
-                            NoSeriesManagement.TestManual(NoSeriesCode);
+                            NoSeries.TestManual(NoSeriesCode);
                     end;
 
                     trigger OnAssistEdit()
                     var
-                        NoSeriesManagement2: Codeunit NoSeriesManagement;
+                        NoSeries: Codeunit "No. Series";
                     begin
-                        if NoSeriesManagement2.SelectSeries(InitNoSeriesCode, NoSeriesCode, NoSeriesCode) then begin
-                            Clear(NoSeriesManagement);
-
-                            DocumentNo := NoSeriesManagement.GetNextNo(NoSeriesCode, PostingDate, false);
+                        if NoSeries.LookupRelatedNoSeries(InitNoSeriesCode, NoSeriesCode, NoSeriesCode) then begin
+                            DocumentNo := NoSeriesBatch.GetNextNo(NoSeriesCode, PostingDate);
                             InitDocumentNo := DocumentNo;
                         end;
                     end;
@@ -138,8 +131,15 @@ page 31185 "VAT Document CZZ"
         }
     }
 
+    trigger OnOpenPage()
+    begin
+        if DocumentNo = '' then
+            DocumentNo := NoSeriesBatch.GetNextNo(NoSeriesCode, PostingDate);
+    end;
+
     var
-        NoSeriesManagement: Codeunit NoSeriesManagement;
+        NoSeriesBatch: Codeunit "No. Series - Batch";
+        NoSeries: Codeunit "No. Series";
         DocumentNo: Code[20];
         InitDocumentNo: Code[20];
         ExternalDocumentNo: Code[35];
@@ -157,11 +157,6 @@ page 31185 "VAT Document CZZ"
     procedure InitDocument(NewNoSeriesCode: Code[20]; NewDocumentNo: Code[20]; NewDocumentDate: Date; NewPostingDate: Date; NewVATDate: Date; NewOriginalDocumentVATDate: Date; NewCurrencyCode: Code[10]; NewCurrencyFactor: Decimal; NewExternalDocumentNo: Code[35]; var AdvancePostingBufferCZZ: Record "Advance Posting Buffer CZZ")
     var
         GeneralLedgerSetup: Record "General Ledger Setup";
-#if not CLEAN22
-#pragma warning disable AL0432
-        ReplaceVATDateMgtCZL: Codeunit "Replace VAT Date Mgt. CZL";
-#pragma warning restore AL0432
-#endif
     begin
         NoSeriesCode := NewNoSeriesCode;
         InitNoSeriesCode := NewNoSeriesCode;
@@ -171,13 +166,6 @@ page 31185 "VAT Document CZZ"
         CurrencyCode := NewCurrencyCode;
         CurrencyFactor := NewCurrencyFactor;
         VATDate := NewVATDate;
-#if not CLEAN22
-#pragma warning disable AL0432
-        if not ReplaceVATDateMgtCZL.IsEnabled() then
-            if VATDate = 0D then
-                VATDate := GetVATDate(PostingDate, DocumentDate);
-#pragma warning restore AL0432
-#endif
         if VATDate = 0D then
             VATDate := GeneralLedgerSetup.GetVATDate(PostingDate, DocumentDate);
         OriginalDocumentVATDate := NewOriginalDocumentVATDate;
@@ -186,13 +174,8 @@ page 31185 "VAT Document CZZ"
                 GeneralLedgerSetup.GetOriginalDocumentVATDateCZL(PostingDate, VATDate, DocumentDate);
         CurrPage.Lines.Page.InitDocumentLines(NewCurrencyCode, NewCurrencyFactor, AdvancePostingBufferCZZ);
 
-        if NewDocumentNo <> '' then begin
-            DocumentNo := NewDocumentNo;
-            DocumentNoEditable := false;
-        end else begin
-            DocumentNo := NoSeriesManagement.GetNextNo(NoSeriesCode, PostingDate, false);
-            DocumentNoEditable := true;
-        end;
+        DocumentNo := NewDocumentNo;
+        DocumentNoEditable := NewDocumentNo = '';
         InitDocumentNo := DocumentNo;
     end;
 
@@ -202,37 +185,6 @@ page 31185 "VAT Document CZZ"
         InitDocument(NewNoSeriesCode, NewDocumentNo, NewDocumentDate, NewPostingDate, NewVATDate, NewOriginalDocumentVATDate, NewCurrencyCode, NewCurrencyFactor, NewExternalDocumentNo, AdvancePostingBufferCZZ);
     end;
 
-#if not CLEAN22
-#pragma warning disable AL0432
-    local procedure GetVATDate(PostingDate2: Date; DocumentDate2: Date): Date
-    var
-        PurchasesPayablesSetup: Record "Purchases & Payables Setup";
-        SalesReceivablesSetup: Record "Sales & Receivables Setup";
-    begin
-        if IsSalesDocument then begin
-            SalesReceivablesSetup.Get();
-            case SalesReceivablesSetup."Default VAT Date CZL" of
-                SalesReceivablesSetup."Default VAT Date CZL"::"Posting Date":
-                    exit(PostingDate2);
-                SalesReceivablesSetup."Default VAT Date CZL"::"Document Date":
-                    exit(DocumentDate2);
-                SalesReceivablesSetup."Default VAT Date CZL"::Blank:
-                    exit(0D);
-            end;
-        end;
-
-        PurchasesPayablesSetup.Get();
-        case PurchasesPayablesSetup."Default VAT Date CZL" of
-            PurchasesPayablesSetup."Default VAT Date CZL"::"Posting Date":
-                exit(PostingDate2);
-            PurchasesPayablesSetup."Default VAT Date CZL"::"Document Date":
-                exit(DocumentDate2);
-            PurchasesPayablesSetup."Default VAT Date CZL"::Blank:
-                exit(0D);
-        end;
-    end;
-#pragma warning restore AL0432
-#endif
     procedure GetDocument(var NewDocumentNo: Code[20]; var NewPostingDate: Date; var NewDocumentDate: Date; var NewVATDate: Date; var NewOriginalDocumentVATDate: Date; var NewExternalDocumentNo: Code[35]; var AdvancePostingBufferCZZ: Record "Advance Posting Buffer CZZ")
     begin
         NewDocumentNo := DocumentNo;
@@ -254,7 +206,7 @@ page 31185 "VAT Document CZZ"
 
     procedure SaveNoSeries()
     begin
-        NoSeriesManagement.SaveNoSeries();
+        NoSeriesBatch.SaveState();
     end;
 
     local procedure UpdateCurrencyFactor(NewCurrencyFactor: Decimal)

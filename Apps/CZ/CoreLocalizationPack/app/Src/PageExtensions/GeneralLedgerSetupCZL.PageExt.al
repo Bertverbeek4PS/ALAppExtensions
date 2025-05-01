@@ -1,11 +1,11 @@
-﻿// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License. See License.txt in the project root for license information.
 // ------------------------------------------------------------------------------------------------
 namespace Microsoft.Finance.GeneralLedger.Setup;
-#if not CLEAN22
+
 using Microsoft.Finance.VAT.Calculation;
-#endif
+using Microsoft.Finance.VAT.Setup;
 
 pageextension 11717 "General Ledger Setup CZL" extends "General Ledger Setup"
 {
@@ -40,31 +40,36 @@ pageextension 11717 "General Ledger Setup CZL" extends "General Ledger Setup"
             {
                 Caption = 'VAT';
 
-#if not CLEAN22
-                field("Use VAT Date CZL"; Rec."Use VAT Date CZL")
-                {
-                    ApplicationArea = Basic, Suite;
-                    ToolTip = 'Specifies if you want to be able to record different accounting and VAT dates in accounting cases.';
-                    Visible = not ReplaceVATDateEnabled;
-                    ObsoleteState = Pending;
-                    ObsoleteTag = '22.0';
-                    ObsoleteReason = 'Replaced by VAT Reporting Date.';
-                }
-#endif
                 field("Def. Orig. Doc. VAT Date CZL"; Rec."Def. Orig. Doc. VAT Date CZL")
                 {
                     ApplicationArea = Basic, Suite;
                     ToolTip = 'Specifies the default original document VAT date type for purchase document (posting date, document date, VAT date or blank).';
                 }
-                field("Allow VAT Posting From CZL"; Rec."Allow VAT Posting From CZL")
+                field("Allow VAT Date From CZL"; VATSetup."Allow VAT Date From")
                 {
-                    ApplicationArea = Basic, Suite;
-                    ToolTip = 'Specifies the earliest VAT date on which posting to the company is allowed.';
+                    ApplicationArea = VAT;
+                    Caption = 'Allow VAT Date From';
+                    ToolTip = 'Specifies the earliest date on which VAT posting to the company books is allowed.';
+                    Visible = IsVATDateEnabled;
+
+                    trigger OnValidate()
+                    begin
+                        VATSetup.Validate("Allow VAT Date From");
+                        VATSetup.Modify();
+                    end;
                 }
-                field("Allow VAT Posting To CZL"; Rec."Allow VAT Posting To CZL")
+                field("Allow VAT Date To CZL"; VATSetup."Allow VAT Date To")
                 {
-                    ApplicationArea = Basic, Suite;
-                    ToolTip = 'Specifies the latest VAT date on which posting to the company is allowed.';
+                    ApplicationArea = VAT;
+                    Caption = 'Allow VAT Date To';
+                    ToolTip = 'Specifies the last date on which VAT posting to the company books is allowed.';
+                    Visible = IsVATDateEnabled;
+
+                    trigger OnValidate()
+                    begin
+                        VATSetup.Validate("Allow VAT Date To");
+                        VATSetup.Modify();
+                    end;
                 }
             }
         }
@@ -91,6 +96,23 @@ pageextension 11717 "General Ledger Setup CZL" extends "General Ledger Setup"
                 }
             }
         }
+        addafter("Additional Reporting Currency")
+        {
+            field("Functional Currency CZL"; Rec."Functional Currency CZL")
+            {
+                ApplicationArea = Basic, Suite;
+                ToolTip = 'Specifies enables the Functional Currency. Functionality requiring the setting of Additional Reporting Currency, which is used to set the local currency for tax reporting (VAT). This ensures that the VAT specification on documents is printed in the local tax reporting currency (VAT).';
+
+                trigger OnValidate()
+                var
+                    FunctionalcurrencyErr: Label 'For the Functional Currency functionality to work correctly, the Additional Reporting Currency field must be set. The Additional Reporting Currency is used within the Functional Currency functionality to set the local currency for tax reporting (VAT).';
+                begin
+                    if Rec."Functional Currency CZL" then
+                        if Rec."Additional Reporting Currency" = '' then
+                            Error(FunctionalcurrencyErr);
+                end;
+            }
+        }
         addlast(Reporting)
         {
             field("Shared Account Schedule CZL"; Rec."Shared Account Schedule CZL")
@@ -100,27 +122,39 @@ pageextension 11717 "General Ledger Setup CZL" extends "General Ledger Setup"
             }
         }
         movefirst(VatCZL; "VAT Reporting Date Usage", "Default VAT Reporting Date")
-#if not CLEAN22
-        modify("VAT Reporting Date Usage")
-        {
-            Visible = ReplaceVATDateEnabled;
-        }
-        modify("Default VAT Reporting Date")
-        {
-            Visible = ReplaceVATDateEnabled;
-        }
-#endif
     }
-#if not CLEAN22
+    actions
+    {
+        addlast("VAT Posting")
+        {
+            action("Non-Deductible VAT Setup CZL")
+            {
+                ApplicationArea = Basic, Suite;
+                Caption = 'Non-Deductible VAT Setup';
+                Image = VATPostingSetup;
+                RunObject = Page "Non-Deductible VAT Setup CZL";
+                ToolTip = 'Set up VAT coefficient correction.';
+                Visible = NonDeductibleVATVisible;
+            }
+        }
+    }
+
     trigger OnOpenPage()
+    var
+        VATReportingDateMgt: Codeunit "VAT Reporting Date Mgt";
     begin
-        ReplaceVATDateEnabled := ReplaceVATDateMgtCZL.IsEnabled();
+        IsVATDateEnabled := VATReportingDateMgt.IsVATDateEnabled();
+        NonDeductibleVATVisible := NonDeductibleVATCZL.IsNonDeductibleVATEnabled();
+    end;
+
+    trigger OnAfterGetRecord()
+    begin
+        VATSetup.Get();
     end;
 
     var
-#pragma warning disable AL0432
-        ReplaceVATDateMgtCZL: Codeunit "Replace VAT Date Mgt. CZL";
-#pragma warning restore AL0432
-        ReplaceVATDateEnabled: Boolean;
-#endif
+        VATSetup: Record "VAT Setup";
+        NonDeductibleVATCZL: Codeunit "Non-Deductible VAT CZL";
+        IsVATDateEnabled: Boolean;
+        NonDeductibleVATVisible: Boolean;
 }
